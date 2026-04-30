@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/fatih/color"
@@ -44,10 +45,12 @@ var serveCmd = &cobra.Command{
 	Short: "Start the WebSocket relay server",
 	Run: func(cmd *cobra.Command, args []string) {
 		python := getPythonPath()
+		base := getBasePath()
+		serverScript := filepath.Join(base, "server.py")
 		color.Cyan("[Simo] Starting relay server on ws://127.0.0.1:%d...", port)
 		
 		// In Go, we can start it in a way that it keeps running
-		c := exec.Command(python, "server.py")
+		c := exec.Command(python, serverScript)
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 		
