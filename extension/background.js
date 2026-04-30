@@ -141,10 +141,20 @@ async function waitForTarget(tabId, ref) {
 
 // ── Relay Connection ───────────────────────────────────────────────────────
 
+let isConnecting = false;
+
 function connect() {
+  if (isConnecting) return;
   if (ws && ws.readyState === WebSocket.OPEN) return;
+
+  isConnecting = true;
   ws = new WebSocket(RELAY_URL);
-  ws.onopen = () => ws.send(JSON.stringify({ type: "register", role: "extension" }));
+
+  ws.onopen = () => {
+    isConnecting = false;
+    ws.send(JSON.stringify({ type: "register", role: "extension" }));
+  };
+
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
     let data = null;
@@ -220,8 +230,18 @@ function connect() {
     } catch (e) { data = { status: "error", message: e.toString() }; }
     if (data && msg.client_id) ws.send(JSON.stringify({ type: "response", client_id: msg.client_id, data }));
   };
-  ws.onclose = () => { ws = null; setTimeout(connect, RECONNECT_DELAY); };
-  ws.onerror = () => { ws = null; setTimeout(connect, RECONNECT_DELAY); };
+
+  ws.onclose = () => {
+    ws = null;
+    isConnecting = false;
+    setTimeout(connect, RECONNECT_DELAY);
+  };
+
+  ws.onerror = () => {
+    // Silence error log by not explicitly logging, let onclose handle retry
+    ws = null;
+    isConnecting = false;
+  };
 }
 
 connect();
