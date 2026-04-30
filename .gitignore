@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.png
+!extension/icon.png
 *.log
 .DS_Store
 node_modules/
