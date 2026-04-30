@@ -200,4 +200,3 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 3. ./simo click <tab_id> <new_ref>        # Strike with updated ref
 ```
 
----
