@@ -12,7 +12,7 @@ Then load the extension in Chrome:
 
 1. Navigate to `chrome://extensions`
 2. Enable **Developer mode**
-3. Click **Load unpacked** → select this directory
+3. Click **Load unpacked** → select the `extension` directory inside this project
 
 ## Usage
 
