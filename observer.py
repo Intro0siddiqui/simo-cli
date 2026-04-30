@@ -44,7 +44,7 @@ async def send_command(port: int, msg: dict) -> dict[str, Any]:
                 sys.exit(1)
             return data
     except ConnectionRefusedError:
-        print(f"{_Term.RED}Error:{_Term.RESET} Relay server not running. (Run ./start-observer.sh)")
+        print(f"{_Term.RED}Error:{_Term.RESET} Relay server not running. (Run ./simo serve)")
         sys.exit(1)
     except asyncio.TimeoutError:
         print(f"{_Term.RED}Error:{_Term.RESET} Operation timed out (Tab or Extension not responding).")
