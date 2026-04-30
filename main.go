@@ -35,6 +35,7 @@ func init() {
 	rootCmd.AddCommand(wrapCmd("hover", "Hover over element by ref"))
 	rootCmd.AddCommand(wrapCmd("drag", "Drag element from one ref to another"))
 	rootCmd.AddCommand(wrapCmd("nav", "Navigate tab to URL"))
+	rootCmd.AddCommand(wrapCmd("open", "Open new tab"))
 	rootCmd.AddCommand(wrapCmd("exec", "Execute JS code"))
 }
 
@@ -81,17 +82,33 @@ func wrapCmd(name, short string) *cobra.Command {
 	}
 }
 
+func getBasePath() string {
+	ex, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	evalPath, err := filepath.EvalSymlinks(ex)
+	if err == nil {
+		return filepath.Dir(evalPath)
+	}
+	return filepath.Dir(ex)
+}
+
 func getPythonPath() string {
-	python := "./.venv/bin/python"
+	base := getBasePath()
+	python := filepath.Join(base, ".venv", "bin", "python")
 	if runtime.GOOS == "windows" {
-		python = ".\\.venv\\Scripts\\python.exe"
+		python = filepath.Join(base, ".venv", "Scripts", "python.exe")
 	}
 	return python
 }
 
 func runObserver(action string, args []string) {
 	python := getPythonPath()
-	fullArgs := append([]string{"observer.py", action}, args...)
+	base := getBasePath()
+	scriptPath := filepath.Join(base, "observer.py")
+	
+	fullArgs := append([]string{scriptPath, action}, args...)
 	
 	c := exec.Command(python, fullArgs...)
 	c.Stdout = os.Stdout

@@ -214,6 +214,10 @@ function connect() {
           await chrome.tabs.update(msg.tabId, { url: msg.url });
           data = { status: "success" };
           break;
+        case "new_tab":
+          const newTab = await chrome.tabs.create({ url: msg.url || "about:blank" });
+          data = { status: "success", tabId: newTab.id };
+          break;
         case "execute":
           await ensureDebuggerAttached(msg.tabId);
           const res = await cdpSendCommand({ tabId: msg.tabId }, "Runtime.evaluate", { expression: msg.code, returnByValue: true, awaitPromise: true });

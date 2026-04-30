@@ -25,3 +25,11 @@ This guide is for AI agents (like me) and developers who are tasked with maintai
 *   **ES Modules**: The extension uses standard ES Modules (`import/export`). 
 *   **Async/Await**: The entire relay and CLI are asynchronous. Avoid blocking calls.
 *   **Stealth**: Never use `document.querySelector` directly for interactions unless the CDP path fails. CDP is our stealth shield.
+
+## 6. Roadmap (Deferred Skills)
+
+| Priority | Skill | Description |
+|----------|-------|-------------|
+| 🔴 High | **Go Relay Port** | Rewrite `server.py` in Go — eliminates Python dependency entirely. |
+| 🟡 Medium | **Dynamic Signature Rotation** | Randomize Hardware-Pulse delay distributions per-session for anti-fingerprinting. |
+| 🟡 Medium | **Multi-Tab Concurrency** | Handle concurrent commands across multiple tabs from a single relay. |

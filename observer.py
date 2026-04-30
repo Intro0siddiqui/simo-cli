@@ -80,6 +80,9 @@ def main():
     parser_nav.add_argument("tab_id", type=int)
     parser_nav.add_argument("url")
 
+    parser_open = subparsers.add_parser("open", help="Open new tab")
+    parser_open.add_argument("url", nargs="?", default="about:blank")
+
     parser_snap = subparsers.add_parser("snap", help="Get accessibility snapshot")
     parser_snap.add_argument("tab_id", type=int)
 
@@ -135,6 +138,13 @@ def main():
             print(f"{_Term.GREEN}Navigating...{_Term.RESET}")
         else:
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to navigate')}")
+
+    elif args.command == "open":
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "new_tab", "url": args.url}))
+        if res.get("status") == "success":
+            print(f"{_Term.GREEN}Opening new tab: {args.url}{_Term.RESET}")
+        else:
+            print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to open tab')}")
 
     elif args.command == "snap":
         res = asyncio.run(send_command(args.port, {"type": "action", "action": "snapshot", "tabId": args.tab_id}))
