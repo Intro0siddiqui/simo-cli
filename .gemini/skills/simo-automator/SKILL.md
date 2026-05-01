@@ -94,30 +94,38 @@ These are Simo's eyes. They determine *what* the agent can see before it acts.
 - **Human Emulation**: Dispatches character-level events with randomized delays (**40ms–120ms**).
 - **Strike Pacing**: Now includes randomized `mousePressed` and `mouseReleased` jitter (50ms–150ms) to defeat pattern-matching bot detection.
 
-### 2.2 Viewport Control (Scrolling)
+### 2.2 Synthetic Hover
+- **Command**: `simo hover <tab_id> <ref>`
+- **What it does**: Dispatches a `mouseMoved` CDP event to the semantic center of a target element.
+- **When to use**: On React-heavy sites, many buttons (e.g., "Unsend", "Delete", "Edit") only *appear* in the AXTree after a hover event triggers a state change. If `snap` doesn't show a button you expect, `hover` a nearby element first, then `snap` again.
+- **Critical pattern**: `hover` → `snap` → `click`. This is the unlock sequence for hidden UI.
+
+### 2.3 Viewport Control (Scrolling)
 - **Command**: `simo scroll <tab_id> <delta_pixels> [--ref <ref>]`
 - **What it does**: Scrolls the window or a specific overflow container.
 - **Why**: Essential for infinite-scroll platforms like Reddit or long lists on Instagram where elements are "Hidden" until scrolled into view.
 
-### 2.3 Intent Strike (Click System)
+### 2.4 Intent Strike (Click System)
 - **Verified Command**: `simo click <tab_id> <ref> [--verify]`
 - **Verified Strike**: After clicking, Simo performs a secondary AXTree scan to confirm the element's state actually updated (e.g., checking if a radio button is now `checked: true`).
 - **Failure Warning**: If the click is ignored by the site (Shadow State), Simo issues a warning rather than a false positive.
 
-### 2.4 Grid-Solver (The Survey Engine)
+### 2.5 Grid-Solver (The Survey Engine)
 - **Command**: `simo grid <tab_id> <grid_ref> "<column_query>"`
 - **Atomic Iteration**: Finds all rows inside a grid container and systematically clicks the column matching your query (e.g., "Highly Likely").
 - **Pacing**: Includes randomized "Think Time" between row clicks (200ms–600ms) to emulate human survey completion.
 
-### 2.5 Navigation
+
+### 2.6 Navigation
 - **Command**: `simo nav <tab_id> <url>` — Navigate an existing tab.
 - **Command**: `simo open <url>` — Open a brand new tab and navigate to URL.
 - **Note**: After `nav`, always wait for the page to stabilize before running `snap`. Large SPAs can take 1–3 seconds to hydrate.
 
-### 2.5 JavaScript Execution
+### 2.7 JavaScript Execution
 - **Command**: `simo exec <tab_id> "<js_code>"`
 - **What it does**: Runs arbitrary JavaScript in the page context via `Runtime.evaluate` CDP.
 - **Use sparingly**: Prefer CDP-native actions (click, type, hover) over JS execution. Direct JS can be detected by anti-bot scripts that monitor `Runtime.evaluate` calls.
+
 
 ---
 
@@ -165,11 +173,15 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 | `snap` | `simo snap <id> [--ref eN]` | **Adaptive Lens**: High-res snapshot |
 | `click` | `simo click <id> <ref> [--verify]` | **Verified Strike**: Click and confirm |
 | `grid` | `simo grid <id> <ref> "Query"` | **Grid-Solver**: Atomic row interaction |
-| `scroll` | `simo scroll <id> <delta>` | **Viewport Control**: Scroll page/element |
+| `scroll` | `simo scroll <id> <delta> [--ref eN]` | **Viewport Control**: Scroll page/element |
+| `hover` | `simo hover <id> <ref>` | Trigger JS listeners / reveal UI |
 | `type` | `simo type <id> <ref> "<text>"` | **Human-Paced**: Type with jitter |
 | `shot` | `simo shot <id> [-o path]` | Take a screenshot → `screenshot.png` |
+| `drag` | `simo drag <id> <from> <to>` | Physical drag-and-drop interaction |
 | `open` | `simo open <url>` | Open a new tab |
 | `nav` | `simo nav <id> <url>` | Navigate existing tab to URL |
+| `exec` | `simo exec <id> "<code>"` | Execute arbitrary JavaScript |
+
 
 ---
 

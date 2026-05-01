@@ -30,7 +30,11 @@ The `obs` command is your unified entry point for monitoring and control.
 | `./simo shot <id> [-o path]` | Take a screenshot (PNG) |
 | `./simo hover <id> <ref>` | Hover an element to reveal hidden menus |
 | `./simo type <id> <ref> <text>` | **Human-Paced**: Type with randomized delays |
+| `./simo drag <id> <from> <to>` | Physical drag-and-drop interaction |
 | `./simo nav <id> <url>` | Navigate a tab to a new URL |
+| `./simo open <url>` | Open a new tab |
+| `./simo exec <id> "<code>"` | Execute arbitrary JavaScript |
+
 
 ### Advanced Capabilities (v1.9.9+)
 
