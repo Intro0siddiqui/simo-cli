@@ -20,53 +20,36 @@ The `obs` command is your unified entry point for monitoring and control.
 
 | Command | Description |
 |---|---|
-| `./start-observer.sh` | Start the relay server (background) |
-| `./obs` | Show open tabs (pretty list) |
-| `./obs snap <tab_id>` | Get a YAML ARIA snapshot (Playwright-grade) |
-| `./obs shot <tab_id> [-o path]` | Take a screenshot (PNG) |
-| `./obs hover <tab_id> <ref>` | Hover an element to reveal hidden menus |
-| `./obs click <tab_id> <ref>` | Click an element (e.g. `e1`) using CDP mouse events |
-| `./obs type <tab_id> <ref> <text>` | Focus element and type text (Hardware-emulated) |
-| `./obs drag <tab_id> <from> <to>` | Drag an element to another element |
-| `./obs nav <tab_id> <url>` | Navigate a tab to a new URL |
-| `./obs exec <tab_id> <code>` | Execute JS code (with CDP fallback) |
-| `./obs status --json` | Show open tabs as JSON |
+| `./simo serve` | Start the WebSocket relay server (background) |
+| `./simo stop` | Stop the relay server |
+| `./simo status` | Show open tabs (pretty list) |
+| `./simo snap <id> [--ref eN]` | **Adaptive Lens**: High-res snapshot (zoom into ref) |
+| `./simo click <id> <ref> [--verify]` | **Verified Strike**: Click and confirm state change |
+| `./simo grid <id> <ref> "Query"` | **Grid-Solver**: Atomic row-by-row interaction |
+| `./simo scroll <id> <delta>` | **Viewport Control**: Scroll page or element |
+| `./simo shot <id> [-o path]` | Take a screenshot (PNG) |
+| `./simo hover <id> <ref>` | Hover an element to reveal hidden menus |
+| `./simo type <id> <ref> <text>` | **Human-Paced**: Type with randomized delays |
+| `./simo nav <id> <url>` | Navigate a tab to a new URL |
 
-### Quick Examples
+### Advanced Capabilities (v1.9.9+)
 
-```bash
-./obs                        # List tabs, find ID (e.g. 42)
-./obs snap 42                # View tree, find input ref (e.g. e3)
-./obs hover 42 e1            # Hover to reveal menu
-./obs type 42 e3 "Hello"     # Fill in a text field
-./obs click 42 e7            # Submit / click a button
-```
-
-### Intelligence Layer
-Simo CLI v1.9.9 includes a "Self-Healing" interaction layer. When you perform a `click`, `type`, or `hover`, the engine automatically:
-1.  **Verifies the Target**: Checks if the reference ID (`ref`) is still valid and present.
-2.  **Semantic Recovery**: If the ID is "stale" (common on dynamic React sites), it re-scans the accessibility tree to find the best match by role and name.
-3.  **Hardware Emulation**: Dispatches low-level mouse and keyboard events that are indistinguishable from human input.
+1.  **The Adaptive Lens**: Use the `--ref` flag on `snap` to perform a targeted "Zoom". This bypasses standard depth limits to resolve deeply nested elements (like individual items in a complex grid) with 100% fidelity.
+2.  **Grid-Solver Logic**: The `grid` command automates the "Strike" protocol for surveys. It identifies rows inside a container and systematically clicks columns matching your semantic query (e.g., "Highly Likely").
+3.  **Closed-Loop Verification**: Use the `--verify` flag on `click` to eliminate "False Positives." Simo will re-scan the AXTree after the click to ensure the checkbox/radio was actually registered.
+4.  **Human-like Pacing**: Every interaction now uses randomized `mousePressed` and `mouseReleased` jitter (40ms-100ms) to bypass basic bot-detection pattern matching.
 
 ## Architecture
 
 ```
-Chrome Extension  ◄──WS:8765──►  server.py (relay)  ◄──WS:8765──►  observer.py (CLI)
+Chrome (CDP) ◄──► Extension ◄──WS:8765──► server.py ◄──► Go Wrapper (simo)
 ```
 
-- **background.js** — persistent service worker, reconnects with exponential backoff
-- **server.py** — lightweight asyncio WebSocket relay
-- **observer.py** — CLI client that queries tabs through the relay
+- **background.js** — The "Nervous System" (CDP bridge)
+- **axtree.js** — The "Visual Cortex" (Semantic filtration)
+- **server.py** — The "Relay" (Async WebSocket gateway)
+- **main.go** — The "Brain" (Cross-platform CLI orchestrator)
 
 ## Documentation
-- [Agent Skills](skills.md) — Detailed sensory and motor capabilities.
-- [Working with Agent](agent.md) — Guide for developers and AI agents.
+- [Agent Protocol](AGENTS.md) — Technical guide for AI and Human developers.
 
-## Pro Tips
-
-### Suppress Debugger Banner
-To avoid the persistent "Spectre started debugging this browser" banner, launch Chrome with:
-```bash
-google-chrome --silent-debugger-extension-api
-```
-Essential for stealthy automation on sites with strict security.

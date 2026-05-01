@@ -3,8 +3,11 @@ package main
 import (
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"syscall"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -14,6 +17,18 @@ var port int
 
 func main() {
 	rootCmd.Execute()
+}
+
+func getSimoDir() string {
+	usr, err := user.Current()
+	var dir string
+	if err == nil {
+		dir = filepath.Join(usr.HomeDir, ".simo")
+	} else {
+		dir = filepath.Join(os.TempDir(), ".simo")
+	}
+	os.MkdirAll(dir, 0755)
+	return dir
 }
 
 var rootCmd = &cobra.Command{
@@ -26,6 +41,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&port, "port", "p", 8765, "port for the relay server")
 
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(stopCmd)
 	rootCmd.AddCommand(statusCmd)
 	
 	// Dynamically wrap all other commands to observer.py
@@ -38,31 +54,78 @@ func init() {
 	rootCmd.AddCommand(wrapCmd("nav", "Navigate tab to URL"))
 	rootCmd.AddCommand(wrapCmd("open", "Open new tab"))
 	rootCmd.AddCommand(wrapCmd("exec", "Execute JS code"))
+	rootCmd.AddCommand(wrapCmd("grid", "Solve a grid of radio/checkboxes"))
+	rootCmd.AddCommand(wrapCmd("scroll", "Scroll the page or an element"))
 }
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start the WebSocket relay server",
+	Short: "Start the WebSocket relay server in the background",
 	Run: func(cmd *cobra.Command, args []string) {
 		python := getPythonPath()
 		base := getBasePath()
 		serverScript := filepath.Join(base, "server.py")
+		
+		simoDir := getSimoDir()
+		logFile := filepath.Join(simoDir, "relay.log")
+		pidFile := filepath.Join(simoDir, "relay.pid")
+
+		if pidBytes, err := os.ReadFile(pidFile); err == nil {
+			pid, _ := strconv.Atoi(string(pidBytes))
+			process, err := os.FindProcess(pid)
+			if err == nil && process.Signal(syscall.Signal(0)) == nil {
+				color.Yellow("[Simo] Relay server is already running (PID %d)", pid)
+				return
+			}
+		}
+
 		color.Cyan("[Simo] Starting relay server on ws://127.0.0.1:%d...", port)
 		
-		// In Go, we can start it in a way that it keeps running
 		c := exec.Command(python, serverScript)
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
 		
-		err := c.Start()
+		outFile, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err == nil {
+			c.Stdout = outFile
+			c.Stderr = outFile
+		}
+
+		err = c.Start()
 		if err != nil {
 			color.Red("Failed to start server: %v", err)
 			return
 		}
 		
-		color.Green("[Simo] Server started (PID %d).", c.Process.Pid)
-		color.Yellow("Keep this terminal open or run with 'nohup' for background use.")
-		c.Wait()
+		os.WriteFile(pidFile, []byte(strconv.Itoa(c.Process.Pid)), 0644)
+		
+		color.Green("[Simo] Server started in background (PID %d).", c.Process.Pid)
+		color.Yellow("Logs: %s", logFile)
+	},
+}
+
+var stopCmd = &cobra.Command{
+	Use:   "stop",
+	Short: "Stop the background relay server",
+	Run: func(cmd *cobra.Command, args []string) {
+		simoDir := getSimoDir()
+		pidFile := filepath.Join(simoDir, "relay.pid")
+		
+		pidBytes, err := os.ReadFile(pidFile)
+		if err != nil {
+			color.Yellow("[Simo] Relay server is not running (no pid file found).")
+			return
+		}
+		
+		pid, _ := strconv.Atoi(string(pidBytes))
+		process, err := os.FindProcess(pid)
+		if err == nil {
+			err = process.Kill()
+			if err == nil {
+				color.Green("[Simo] Stopped relay server (PID %d).", pid)
+			} else {
+				color.Red("[Simo] Failed to stop process: %v", err)
+			}
+		}
+		os.Remove(pidFile)
 	},
 }
 

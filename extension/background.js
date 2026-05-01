@@ -69,7 +69,12 @@ chrome.debugger.onDetach.addListener((source) => { if (source.tabId) delete debu
 
 // ── Interaction Logic ──────────────────────────────────────────────────────
 
-async function generateCdpSnapshot(tabId) {
+async function generateCdpSnapshot(tabId, ref = null) {
+  let targetBackendNodeId = null;
+  if (ref) {
+    const target = await resolveTarget(tabId, ref);
+    targetBackendNodeId = target.backendNodeId;
+  }
   await ensureDebuggerAttached(tabId);
   const debuggee = { tabId };
   await cdpSendCommand(debuggee, "Accessibility.enable");
@@ -77,11 +82,18 @@ async function generateCdpSnapshot(tabId) {
   const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
   
   const context = { nodeMap: {}, refCounter: { val: 1 }, cdpSendCommand };
-  const yaml = await walkAXTree(debuggee, nodes, 0, context);
+  const yaml = await walkAXTree(debuggee, nodes, 0, context, "", targetBackendNodeId);
   const enrichedYaml = await addBoxDataToYaml(yaml, context.nodeMap, cdpSendCommand);
   
-  tabState[tabId] = { nodeMap: context.nodeMap };
-  await saveNodeMap(tabId, context.nodeMap);
+  if (!ref) {
+    tabState[tabId] = { nodeMap: context.nodeMap };
+    await saveNodeMap(tabId, context.nodeMap);
+  } else {
+    const existingMap = await loadNodeMap(tabId);
+    const mergedMap = { ...existingMap, ...context.nodeMap };
+    tabState[tabId] = { nodeMap: mergedMap };
+    await saveNodeMap(tabId, mergedMap);
+  }
   return enrichedYaml;
 }
 
@@ -139,6 +151,26 @@ async function waitForTarget(tabId, ref) {
   throw new Error("Wait timeout");
 }
 
+async function verifyState(tabId, ref, attribute = "checked", expectedValue = true) {
+  // Re-snapshot the element to see if it changed
+  await new Promise(r => setTimeout(r, 100)); // Short wait for DOM update
+  const node = await resolveTarget(tabId, ref);
+  try {
+    const debuggee = { tabId };
+    await ensureDebuggerAttached(tabId);
+    const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
+    const match = nodes.find(n => n.backendDOMNodeId === node.backendNodeId);
+    if (!match) return false;
+    
+    // Check various ways a "checked" state might be represented in AXTree
+    const checkedProp = match.properties?.find(p => p.name === "checked");
+    if (checkedProp) return checkedProp.value.value === expectedValue || checkedProp.value.value === "true";
+    
+    // Fallback: check if the node name/role changed or if there's a state-based name change
+    return false;
+  } catch (e) { return false; }
+}
+
 // ── Relay Connection ───────────────────────────────────────────────────────
 
 let isConnecting = false;
@@ -165,16 +197,17 @@ function connect() {
           data = { count: tabs.length, tabs: tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active })) };
           break;
         case "snapshot":
-          data = { status: "success", snapshot: await generateCdpSnapshot(msg.tabId) };
+          data = { status: "success", snapshot: await generateCdpSnapshot(msg.tabId, msg.ref) };
           break;
-        case "click":
+        case "click": {
           const c = msg.wait ? await waitForTarget(msg.tabId, msg.ref) : await resolveTarget(msg.tabId, msg.ref);
           await ensureDebuggerAttached(msg.tabId);
           try {
             const { x, y } = await ensureActionable(c.debuggee, c.backendNodeId);
             await cdpSendCommand(c.debuggee, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-            await new Promise(r => setTimeout(r, 100));
+            await new Promise(r => setTimeout(r, 50 + Math.random() * 50));
             await cdpSendCommand(c.debuggee, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+            await new Promise(r => setTimeout(r, 40 + Math.random() * 60));
             await cdpSendCommand(c.debuggee, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
           } catch (e) {
             const { object } = await cdpSendCommand(c.debuggee, "DOM.resolveNode", { backendNodeId: c.backendNodeId });
@@ -183,15 +216,63 @@ function connect() {
               objectId: object.objectId
             });
           }
-          data = { status: "success" };
+          if (msg.verify) {
+            const ok = await verifyState(msg.tabId, msg.ref);
+            data = { status: ok ? "success" : "warning", verified: ok };
+          } else {
+            data = { status: "success" };
+          }
           break;
-        case "hover":
+        }
+        case "grid_strike": {
+          const grid = await resolveTarget(msg.tabId, msg.gridRef);
+          await ensureDebuggerAttached(msg.tabId);
+          
+          const { nodes: allNodes } = await cdpSendCommand({ tabId: msg.tabId }, "Accessibility.getFullAXTree");
+          const gridNode = allNodes.find(n => n.backendDOMNodeId === grid.backendNodeId);
+          if (!gridNode) throw new Error("Grid container vanished");
+
+          const rows = gridNode.childIds || [];
+          let clickedCount = 0;
+
+          for (const rowId of rows) {
+            const rowNode = allNodes.find(n => n.nodeId === rowId);
+            if (!rowNode) continue;
+
+            const findTarget = (nodeId) => {
+               const node = allNodes.find(n => n.nodeId === nodeId);
+               if (!node) return null;
+               if (node.name?.value?.toLowerCase().includes(msg.columnQuery.toLowerCase())) return node;
+               for (const childId of (node.childIds || [])) {
+                 const found = findTarget(childId);
+                 if (found) return found;
+               }
+               return null;
+            };
+
+            const target = findTarget(rowId);
+            if (target) {
+              const { x, y } = await ensureActionable({ tabId: msg.tabId }, target.backendDOMNodeId);
+              await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+              await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
+              await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+              await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+              
+              clickedCount++;
+              await new Promise(r => setTimeout(r, 200 + Math.random() * 400));
+            }
+          }
+          data = { status: "success", clicked: clickedCount };
+          break;
+        }
+        case "hover": {
           const h = msg.wait ? await waitForTarget(msg.tabId, msg.ref) : await resolveTarget(msg.tabId, msg.ref);
           await ensureDebuggerAttached(msg.tabId);
           const { x: hx, y: hy } = await ensureActionable(h.debuggee, h.backendNodeId);
           await cdpSendCommand(h.debuggee, "Input.dispatchMouseEvent", { type: "mouseMoved", x: hx, y: hy });
           data = { status: "success" };
           break;
+        }
         case "raw_click":
           await ensureDebuggerAttached(msg.tabId);
           await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mouseMoved", x: msg.x, y: msg.y });
@@ -201,7 +282,7 @@ function connect() {
           await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mouseReleased", x: msg.x, y: msg.y, button: "left", clickCount: 1 });
           data = { status: "success" };
           break;
-        case "type":
+        case "type": {
           const t = msg.wait ? await waitForTarget(msg.tabId, msg.ref) : await resolveTarget(msg.tabId, msg.ref);
           await ensureDebuggerAttached(msg.tabId);
           const { x: tx, y: ty } = await ensureActionable(t.debuggee, t.backendNodeId);
@@ -210,6 +291,7 @@ function connect() {
           await humanType(t.debuggee, msg.text);
           data = { status: "success" };
           break;
+        }
         case "navigate":
           await chrome.tabs.update(msg.tabId, { url: msg.url });
           data = { status: "success" };
@@ -223,11 +305,32 @@ function connect() {
           const res = await cdpSendCommand({ tabId: msg.tabId }, "Runtime.evaluate", { expression: msg.code, returnByValue: true, awaitPromise: true });
           data = { success: true, result: res.result?.value };
           break;
-        case "screenshot":
+        case "scroll": {
+          await ensureDebuggerAttached(msg.tabId);
+          const scrollExpr = msg.ref 
+            ? `(async () => { const el = document.querySelector('[data-ref="${msg.ref}"]'); if (el) el.scrollBy(0, ${msg.delta}); else window.scrollBy(0, ${msg.delta}); })()`
+            : `window.scrollBy(0, ${msg.delta})`;
+          // Simo-specific: resolve ref to DOM node if provided
+          if (msg.ref) {
+            const s = await resolveTarget(msg.tabId, msg.ref);
+            const { object } = await cdpSendCommand(s.debuggee, "DOM.resolveNode", { backendNodeId: s.backendNodeId });
+            await cdpSendCommand(s.debuggee, "Runtime.callFunctionOn", {
+              functionDeclaration: `function(delta) { this.scrollBy(0, delta); }`,
+              arguments: [{ value: msg.delta }],
+              objectId: object.objectId
+            });
+          } else {
+            await cdpSendCommand({ tabId: msg.tabId }, "Runtime.evaluate", { expression: `window.scrollBy(0, ${msg.delta})` });
+          }
+          data = { status: "success" };
+          break;
+        }
+        case "screenshot": {
           await ensureDebuggerAttached(msg.tabId);
           const shot = await cdpSendCommand({ tabId: msg.tabId }, "Page.captureScreenshot", { format: "png", fromSurface: true });
           data = { status: "success", data: shot.data };
           break;
+        }
         default:
           data = { status: "error", message: `Unknown action: ${msg.action}` };
       }

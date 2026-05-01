@@ -85,6 +85,7 @@ def main():
 
     parser_snap = subparsers.add_parser("snap", help="Get accessibility snapshot")
     parser_snap.add_argument("tab_id", type=int)
+    parser_snap.add_argument("--ref", help="Zoom into a specific ref")
 
     parser_wait = subparsers.add_parser("wait", help="Wait for element to appear/become actionable")
     parser_wait.add_argument("tab_id", type=int)
@@ -95,6 +96,7 @@ def main():
     parser_click.add_argument("tab_id", type=int)
     parser_click.add_argument("ref")
     parser_click.add_argument("--wait", action="store_true", help="Wait for element before clicking")
+    parser_click.add_argument("--verify", action="store_true", help="Verify if click actually updated state")
 
     parser_hover = subparsers.add_parser("hover", help="Hover over an element by ref")
     parser_hover.add_argument("tab_id", type=int)
@@ -115,6 +117,16 @@ def main():
     parser_drag.add_argument("tab_id", type=int)
     parser_drag.add_argument("from_ref")
     parser_drag.add_argument("to_ref")
+    
+    parser_grid = subparsers.add_parser("grid", help="Solve a grid of radio/checkboxes")
+    parser_grid.add_argument("tab_id", type=int)
+    parser_grid.add_argument("grid_ref")
+    parser_grid.add_argument("column_query", help="Text to match (e.g. 'Strongly Agree')")
+    
+    parser_scroll = subparsers.add_parser("scroll", help="Scroll the page or an element")
+    parser_scroll.add_argument("tab_id", type=int)
+    parser_scroll.add_argument("delta", type=int, help="Pixels to scroll (positive for down, negative for up)")
+    parser_scroll.add_argument("--ref", help="Optional element ref to scroll inside")
 
     parser_exec = subparsers.add_parser("exec", help="Run JS code")
     parser_exec.add_argument("tab_id", type=int)
@@ -147,7 +159,7 @@ def main():
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to open tab')}")
 
     elif args.command == "snap":
-        res = asyncio.run(send_command(args.port, {"type": "action", "action": "snapshot", "tabId": args.tab_id}))
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "snapshot", "tabId": args.tab_id, "ref": getattr(args, "ref", None)}))
         if res.get("status") == "success":
             render_snapshot(res.get("snapshot"))
             print(f"{_Term.DIM}(Note: Captured via CDP){_Term.RESET}\n")
@@ -163,11 +175,28 @@ def main():
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Timed out waiting for element')}")
 
     elif args.command == "click":
-        res = asyncio.run(send_command(args.port, {"type": "action", "action": "click", "tabId": args.tab_id, "ref": args.ref, "wait": args.wait}))
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "click", "tabId": args.tab_id, "ref": args.ref, "wait": args.wait, "verify": args.verify}))
         if res.get("status") == "success":
             print(f"{_Term.GREEN}Click dispatched to {args.ref}{_Term.RESET}")
+        elif res.get("status") == "warning":
+            print(f"{_Term.YELLOW}Warning: Click sent but verification failed (state didn't change).{_Term.RESET}")
         else:
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to click element')}")
+
+    elif args.command == "grid":
+        print(f"{_Term.BLUE}Executing Grid-Strike on {args.grid_ref} targeting '{args.column_query}'...{_Term.RESET}")
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "grid_strike", "tabId": args.tab_id, "gridRef": args.grid_ref, "columnQuery": args.column_query}))
+        if res.get("status") == "success":
+            print(f"{_Term.GREEN}Grid Strike complete! Clicked {res.get('clicked')} rows.{_Term.RESET}")
+        else:
+            print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Grid strike failed')}")
+
+    elif args.command == "scroll":
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "scroll", "tabId": args.tab_id, "delta": args.delta, "ref": args.ref}))
+        if res.get("status") == "success":
+            print(f"{_Term.GREEN}Scrolled {args.delta}px{_Term.RESET}")
+        else:
+            print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to scroll')}")
 
     elif args.command == "drag":
         asyncio.run(send_command(args.port, {"type": "action", "action": "drag", "tabId": args.tab_id, "from": args.from_ref, "to": args.to_ref}))

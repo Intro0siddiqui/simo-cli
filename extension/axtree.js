@@ -16,15 +16,24 @@ const INTERACTIVE_ROLES = new Set([
 /**
  * Walks the accessibility tree with smart filtering.
  */
-export async function walkAXTree(debuggee, nodes, depth, context, parentName = "") {
-  if (depth > MAX_DEPTH) return "";
+export async function walkAXTree(debuggee, nodes, depth, context, parentName = "", targetBackendNodeId = null) {
+  const maxDepth = targetBackendNodeId ? 100 : MAX_DEPTH;
+  if (depth > maxDepth) return "";
   
   const { nodeMap, refCounter, cdpSendCommand } = context;
   const nodeById = {};
   nodes.forEach(n => nodeById[n.nodeId] = n);
 
   let yaml = "";
-  const rootNode = nodes.find(n => n.role?.value === "RootWebArea") || nodes[0];
+  
+  let rootNode = null;
+  if (targetBackendNodeId) {
+    rootNode = nodes.find(n => n.backendDOMNodeId === targetBackendNodeId);
+  }
+  if (!rootNode) {
+    rootNode = nodes.find(n => n.role?.value === "RootWebArea") || nodes[0];
+  }
+  
   if (!rootNode) return "";
 
   const stack = [{ id: rootNode.nodeId, depth, pName: "" }];

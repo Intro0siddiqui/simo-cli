@@ -12,24 +12,24 @@ This guide is for AI agents (like me) and developers who are tasked with maintai
 *   **Box Data**: Any changes to the tree walker must preserve the `box` model calculation, as the `click` and `hover` commands rely on these coordinates.
 
 ## 3. Interaction Protocol
-*   **Hover First**: On React-heavy sites, many buttons only manifest in the Accessibility Tree after a hover event. If a button is missing, try `./obs hover <id> <nearby_element>` first.
-*   **Verify with `shot`**: After a critical action (sending a message, unsending), always take a screenshot via `./obs shot` to verify the state visually.
-*   **Wait for Stability**: Use the `--wait` flag in CLI commands to ensure the extension polls for the element if it's currently being hydrated.
+*   **Adaptive Lens (Zoom)**: Use `simo snap <id> --ref <ref>` to dive into complex subtrees. This bypasses the global `MAX_DEPTH` and performs a high-resolution walk (Depth 100) on the target.
+*   **Grid-Strike**: Use `simo grid <id> <grid_ref> "Column Name"` for massive datasets. This iterates row-by-row with human-like pacing and semantic matching.
+*   **Verified Clicks**: Always prefer `simo click <id> <ref> --verify` for mission-critical interactions. This re-scans the AXTree to confirm the state actually changed.
+*   **Scrolling**: If an element is off-screen, use `simo scroll <id> <delta>` to bring it into the viewport before clicking.
 
 ## 4. Debugging the Relay
 *   If commands are timing out, check the `server.py` logs. 
 *   Ensure the extension is loaded in "Developer Mode" and the background service worker is active.
-*   **Tab IDs**: Tab IDs are ephemeral. Always run `./obs` to get the current valid ID before starting an interaction loop.
+*   **Switch Scoping**: When adding new actions to `background.js`, always wrap `case` logic in `{}` blocks to avoid variable redeclaration errors.
 
 ## 5. Coding Standards
 *   **ES Modules**: The extension uses standard ES Modules (`import/export`). 
-*   **Async/Await**: The entire relay and CLI are asynchronous. Avoid blocking calls.
-*   **Stealth**: Never use `document.querySelector` directly for interactions unless the CDP path fails. CDP is our stealth shield.
+*   **Go Synchronization**: If you modify `observer.py` arguments, you MUST also update `main.go` and run `go build -o simo main.go` to keep the binary in sync.
 
 ## 6. Roadmap (Deferred Skills)
 
 | Priority | Skill | Description |
 |----------|-------|-------------|
 | 🔴 High | **Go Relay Port** | Rewrite `server.py` in Go — eliminates Python dependency entirely. |
-| 🟡 Medium | **Dynamic Signature Rotation** | Randomize Hardware-Pulse delay distributions per-session for anti-fingerprinting. |
-| 🟡 Medium | **Multi-Tab Concurrency** | Handle concurrent commands across multiple tabs from a single relay. |
+| 🟡 Medium | **Hardware-Pulse** | Implement `mousePressed` + hold + `mouseReleased` with randomized jitter for anti-bot. |
+| 🟢 Low | **Multi-Tab Concurrency** | Verified functional during stress tests. |
