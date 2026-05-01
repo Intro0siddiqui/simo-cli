@@ -69,22 +69,19 @@ Before describing skills, understand the system topology — because every skill
 
 These are Simo's eyes. They determine *what* the agent can see before it acts.
 
-### 1.1 Deep-Sight Semantic Traversal
-- **Command**: `simo snap <tab_id>`
-- **What it does**: Walks the full Accessibility Tree (AXTree) via `Accessibility.getFullAXTree` CDP command, up to **30 levels deep**.
-- **Why AXTree over DOM**: Modern SPAs (React, Vue, Angular) re-render the DOM constantly. The AXTree is stable — it reflects *semantic roles* (button, textbox, link) and *names* (what screen readers see), not transient CSS classes or JavaScript state.
-- **Output format**: A YAML-like tree where each node is assigned a stable `[eN]` reference and enriched with bounding box coordinates `[box=x,y,w,h]`.
-- **Key rule**: Never reduce the traversal depth below 30. Instagram and LinkedIn bury actionable elements 20+ levels deep inside their virtual DOM trees.
+### 1.1 Deep-Sight Semantic Traversal (Adaptive Lens)
+- **Standard Command**: `simo snap <tab_id>` — Walks AXTree up to **30 levels deep**.
+- **Zoom Command**: `simo snap <tab_id> --ref <ref>` — **Adaptive Lens Mode**. Targeted walk of a specific subtree up to **100 levels deep**. 
+- **Why it matters**: Modern SPAs (Instagram/LinkedIn) often bury actionable elements (like message inputs or grid items) 50+ levels deep. Standard snapshots miss these. The Adaptive Lens isolates the target and dives deep without bloating the context with irrelevant sidebar noise.
 
 ### 1.2 Spatial Awareness
-- Every node in the snapshot includes `[box=x,y,w,h]` bounding box data.
-- The box stores the **left-edge x**, **top-edge y**, **width**, and **height** in screen pixels.
-- The CDP click system derives click coordinates from the box center: `cx = x + w/2`, `cy = y + h/2`.
-- This is essential for the `raw_click` command when you need to click a coordinate directly, bypassing node resolution.
+- Every node in the snapshot includes `[box=cx,cy,w,h]` bounding box data.
+- The box stores the **center x**, **center y**, **width**, and **height** in screen pixels.
+- The CDP click system derives click coordinates from the box center. **Simo v1.9.9+ automatically handles scrolling** to bring off-screen elements into the viewport if they are not actionable.
 
 ### 1.3 Visual Witnessing (Screenshot)
-- **Command**: `simo shot <tab_id>`
-- **What it does**: Captures a full-page screenshot via `Page.captureScreenshot` CDP, saves as `screenshot.png` in the working directory.
+- **Command**: `simo shot <tab_id> [-o path]`
+- **What it does**: Captures a full-page screenshot via `Page.captureScreenshot` CDP, saves as `screenshot.png` (or custom path) in the working directory.
 - **When to use**: Always after a critical action (sending a message, clicking a submit button, navigating). This is Simo's equivalent of "opening your eyes" to verify the outcome.
 - **Protocol**: **Snap → Act → Shot.** Never assume an action succeeded without visual confirmation.
 
@@ -92,31 +89,27 @@ These are Simo's eyes. They determine *what* the agent can see before it acts.
 
 ## 2. 🖐️ Motor Skills (Interaction)
 
-These are Simo's hands. They determine *how* the agent can manipulate the browser.
-
 ### 2.1 Hardware-Pulse Typing
 - **Command**: `simo type <tab_id> <ref> "<text>"`
-- **What it does**: Dispatches character-level `keyDown → char → keyUp` CDP events for each character, with a randomized delay of **40ms–120ms** per keystroke.
-- **Why not `insertText`**: Platforms like Instagram and LinkedIn listen for native keyboard events. Synthetic `insertText` is trivially detected. Hardware-Pulse emulates the timing signature of real human typing, bypassing event-level bot detection.
-- **Optional**: Use `--wait` to poll for the element to appear before typing.
+- **Human Emulation**: Dispatches character-level events with randomized delays (**40ms–120ms**).
+- **Strike Pacing**: Now includes randomized `mousePressed` and `mouseReleased` jitter (50ms–150ms) to defeat pattern-matching bot detection.
 
-### 2.2 Synthetic Hover
-- **Command**: `simo hover <tab_id> <ref>`
-- **What it does**: Dispatches a `mouseMoved` CDP event to the semantic center of a target element.
-- **When to use**: On React-heavy sites, many buttons (e.g., "Unsend", "Delete", "Edit") only *appear* in the AXTree after a hover event triggers a state change. If `snap` doesn't show a button you expect, `hover` a nearby element first, then `snap` again.
-- **Critical pattern**: `hover` → `snap` → `click`. This is the unlock sequence for hidden UI.
+### 2.2 Viewport Control (Scrolling)
+- **Command**: `simo scroll <tab_id> <delta_pixels> [--ref <ref>]`
+- **What it does**: Scrolls the window or a specific overflow container.
+- **Why**: Essential for infinite-scroll platforms like Reddit or long lists on Instagram where elements are "Hidden" until scrolled into view.
 
 ### 2.3 Intent Strike (Click System)
-- **Command**: `simo click <tab_id> <ref> [--wait]`
-- **What it does**: A three-tier execution model designed to handle the full spectrum of browser behavior:
+- **Verified Command**: `simo click <tab_id> <ref> [--verify]`
+- **Verified Strike**: After clicking, Simo performs a secondary AXTree scan to confirm the element's state actually updated (e.g., checking if a radio button is now `checked: true`).
+- **Failure Warning**: If the click is ignored by the site (Shadow State), Simo issues a warning rather than a false positive.
 
-| Tier | Method | When Used |
-|------|--------|-----------|
-| **1. Coordinate Strike** | CDP `dispatchMouseEvent` (move → press → release) | Default path — clean and stealthy |
-| **2. DOM Fallback** | `Runtime.callFunctionOn` with `this.click()` | When CDP coordinates are rejected |
-| **3. Stability Check** | `DOM.getBoxModel` polling (10 retries, 100ms interval) | Before every click to ensure element isn't loading/moving |
+### 2.4 Grid-Solver (The Survey Engine)
+- **Command**: `simo grid <tab_id> <grid_ref> "<column_query>"`
+- **Atomic Iteration**: Finds all rows inside a grid container and systematically clicks the column matching your query (e.g., "Highly Likely").
+- **Pacing**: Includes randomized "Think Time" between row clicks (200ms–600ms) to emulate human survey completion.
 
-### 2.4 Navigation
+### 2.5 Navigation
 - **Command**: `simo nav <tab_id> <url>` — Navigate an existing tab.
 - **Command**: `simo open <url>` — Open a brand new tab and navigate to URL.
 - **Note**: After `nav`, always wait for the page to stabilize before running `snap`. Large SPAs can take 1–3 seconds to hydrate.
@@ -169,34 +162,34 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 |---------|--------|-------------|
 | `serve` | `simo serve` | Start the WebSocket relay server |
 | `status` | `simo status` | List all open browser tabs with IDs |
+| `snap` | `simo snap <id> [--ref eN]` | **Adaptive Lens**: High-res snapshot |
+| `click` | `simo click <id> <ref> [--verify]` | **Verified Strike**: Click and confirm |
+| `grid` | `simo grid <id> <ref> "Query"` | **Grid-Solver**: Atomic row interaction |
+| `scroll` | `simo scroll <id> <delta>` | **Viewport Control**: Scroll page/element |
+| `type` | `simo type <id> <ref> "<text>"` | **Human-Paced**: Type with jitter |
+| `shot` | `simo shot <id> [-o path]` | Take a screenshot → `screenshot.png` |
 | `open` | `simo open <url>` | Open a new tab |
-| `nav` | `simo nav <tab_id> <url>` | Navigate existing tab to URL |
-| `snap` | `simo snap <tab_id>` | Get semantic AXTree snapshot |
-| `shot` | `simo shot <tab_id>` | Take a screenshot → `screenshot.png` |
-| `click` | `simo click <tab_id> <ref> [--wait]` | Click an element by ref |
-| `hover` | `simo hover <tab_id> <ref> [--wait]` | Hover over an element |
-| `type` | `simo type <tab_id> <ref> "<text>" [--wait]` | Type text into an element |
-| `drag` | `simo drag <tab_id> <from_ref> <to_ref>` | Drag element to another element |
-| `exec` | `simo exec <tab_id> "<js_code>"` | Execute JavaScript in tab context |
+| `nav` | `simo nav <id> <url>` | Navigate existing tab to URL |
 
 ---
 
 ## 6. 🔁 Standard Operating Procedures
 
-### High-Stakes Interaction Flow (Instagram/LinkedIn)
+### The "Adaptive Mission" Flow
 ```bash
-1. simo status                          # Get current tab IDs
-2. simo snap <tab_id>                   # See the semantic landscape
-3. simo hover <tab_id> <nearby_ref>     # Unlock hidden elements if needed
-4. simo snap <tab_id>                   # Re-scan after hover
-5. simo click <tab_id> <target_ref>     # Execute the Intent Strike
-6. simo shot <tab_id>                   # Witness the outcome visually
+1. simo status                          # Get tab ID
+2. simo snap <id>                       # Identify container ref (e.g. e29)
+3. simo snap <id> --ref e29             # Adaptive Lens: Zoom into the container
+4. simo scroll <id> 400 --ref e29       # Bring hidden items into view
+5. simo click <id> <target> --verify    # Execute and confirm
+6. simo shot <id>                       # Visual verification
 ```
 
-### Recovering from a Stale Ref
+### Grid Strike (Survey Automation)
 ```bash
-1. simo snap <tab_id>                   # Re-scan the tree
-2.  Check new snapshot for same role/name # Find the re-rendered element
-3. simo click <tab_id> <new_ref>        # Strike with updated ref
+1. simo snap <id>                       # Find grid container ref
+2. simo grid <id> <ref> "Highly Likely" # Strike all rows
+3. simo click <id> <next_button_ref>    # Proceed to next page
 ```
+
 
