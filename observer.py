@@ -86,6 +86,12 @@ def main():
     parser_snap = subparsers.add_parser("snap", help="Get accessibility snapshot")
     parser_snap.add_argument("tab_id", type=int)
     parser_snap.add_argument("--ref", help="Zoom into a specific ref")
+    parser_snap.add_argument("--only-interactive", action="store_true", help="Only show interactive elements")
+
+    parser_wait_text = subparsers.add_parser("wait-text", help="Wait for text to appear in the AXTree")
+    parser_wait_text.add_argument("tab_id", type=int)
+    parser_wait_text.add_argument("text")
+    parser_wait_text.add_argument("--timeout", type=int, default=10000)
 
     parser_wait = subparsers.add_parser("wait", help="Wait for element to appear/become actionable")
     parser_wait.add_argument("tab_id", type=int)
@@ -159,12 +165,20 @@ def main():
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to open tab')}")
 
     elif args.command == "snap":
-        res = asyncio.run(send_command(args.port, {"type": "action", "action": "snapshot", "tabId": args.tab_id, "ref": getattr(args, "ref", None)}))
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "snapshot", "tabId": args.tab_id, "ref": getattr(args, "ref", None), "interactiveOnly": getattr(args, "only_interactive", False)}))
         if res.get("status") == "success":
             render_snapshot(res.get("snapshot"))
             print(f"{_Term.DIM}(Note: Captured via CDP){_Term.RESET}\n")
         else:
             print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Failed to take snapshot')}")
+
+    elif args.command == "wait-text":
+        print(f"{_Term.BLUE}Waiting for text '{args.text}'...{_Term.RESET}")
+        res = asyncio.run(send_command(args.port, {"type": "action", "action": "wait_text", "tabId": args.tab_id, "text": args.text, "timeout": args.timeout}))
+        if res.get("status") == "success":
+            print(f"{_Term.GREEN}Text '{args.text}' found in the accessibility tree.{_Term.RESET}")
+        else:
+            print(f"{_Term.RED}Error:{_Term.RESET} {res.get('message', 'Timed out waiting for text')}")
 
     elif args.command == "wait":
         print(f"{_Term.BLUE}Waiting for {args.ref}...{_Term.RESET}")

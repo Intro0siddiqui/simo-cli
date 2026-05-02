@@ -69,7 +69,7 @@ chrome.debugger.onDetach.addListener((source) => { if (source.tabId) delete debu
 
 // ── Interaction Logic ──────────────────────────────────────────────────────
 
-async function generateCdpSnapshot(tabId, ref = null) {
+async function generateCdpSnapshot(tabId, ref = null, interactiveOnly = false) {
   let targetBackendNodeId = null;
   if (ref) {
     const target = await resolveTarget(tabId, ref);
@@ -77,11 +77,33 @@ async function generateCdpSnapshot(tabId, ref = null) {
   }
   await ensureDebuggerAttached(tabId);
   const debuggee = { tabId };
+  
+  // DOM Hydration: Expose floating/unlabeled custom buttons to the AXTree
+  try {
+    await cdpSendCommand(debuggee, "Runtime.evaluate", {
+      expression: `
+        (function() {
+          try {
+            const els = document.querySelectorAll('div, span, svg, i, [class*="btn"], [class*="button"]');
+            for (const el of els) {
+              if (el.hasAttribute('role') || el.hasAttribute('aria-label') || el.innerText?.trim()) continue;
+              const style = window.getComputedStyle(el);
+              if (style.cursor === 'pointer' || el.hasAttribute('onclick')) {
+                el.setAttribute('role', 'button');
+                el.setAttribute('aria-label', el.className || el.id || 'floating action button');
+              }
+            }
+          } catch(e) {}
+        })();
+      `
+    });
+  } catch (e) {}
+
   await cdpSendCommand(debuggee, "Accessibility.enable");
   await cdpSendCommand(debuggee, "DOM.enable");
   const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
   
-  const context = { nodeMap: {}, refCounter: { val: 1 }, cdpSendCommand };
+  const context = { nodeMap: {}, refCounter: { val: 1 }, cdpSendCommand, interactiveOnly };
   const yaml = await walkAXTree(debuggee, nodes, 0, context, "", targetBackendNodeId);
   const enrichedYaml = await addBoxDataToYaml(yaml, context.nodeMap, cdpSendCommand);
   
@@ -102,7 +124,10 @@ async function ensureActionable(debuggee, backendNodeId) {
     try {
       const { model } = await cdpSendCommand(debuggee, "DOM.getBoxModel", { backendNodeId });
       if (model && model.content) {
-        return { x: (model.content[0]+model.content[4])/2, y: (model.content[1]+model.content[5])/2 };
+        return { 
+          x: (model.content[0]+model.content[4])/2, 
+          y: (model.content[1]+model.content[5])/2 
+        };
       }
     } catch (e) {}
     await new Promise(r => setTimeout(r, 100));
@@ -152,23 +177,41 @@ async function waitForTarget(tabId, ref) {
 }
 
 async function verifyState(tabId, ref, attribute = "checked", expectedValue = true) {
-  // Re-snapshot the element to see if it changed
-  await new Promise(r => setTimeout(r, 100)); // Short wait for DOM update
-  const node = await resolveTarget(tabId, ref);
-  try {
-    const debuggee = { tabId };
-    await ensureDebuggerAttached(tabId);
-    const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
-    const match = nodes.find(n => n.backendDOMNodeId === node.backendNodeId);
-    if (!match) return false;
-    
-    // Check various ways a "checked" state might be represented in AXTree
-    const checkedProp = match.properties?.find(p => p.name === "checked");
-    if (checkedProp) return checkedProp.value.value === expectedValue || checkedProp.value.value === "true";
-    
-    // Fallback: check if the node name/role changed or if there's a state-based name change
-    return false;
-  } catch (e) { return false; }
+  const maxAttempts = 15; // Poll up to 1.5 seconds
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 100)); // 100ms interval
+    try {
+      const node = await resolveTarget(tabId, ref);
+      const debuggee = { tabId };
+      await ensureDebuggerAttached(tabId);
+      const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
+      const match = nodes.find(n => n.backendDOMNodeId === node.backendNodeId);
+      if (!match) continue; // Might have temporarily vanished, keep trying
+      
+      // Check various ways a state might be represented in AXTree
+      const checkedProp = match.properties?.find(p => p.name === "checked" || p.name === "selected" || p.name === "expanded");
+      if (checkedProp && (checkedProp.value.value === expectedValue || String(checkedProp.value.value) === "true")) {
+        return true;
+      }
+    } catch (e) {
+      // Continue polling on error
+    }
+  }
+  return false;
+}
+
+async function waitText(tabId, text, timeout = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      await ensureDebuggerAttached(tabId);
+      const { nodes } = await cdpSendCommand({ tabId }, "Accessibility.getFullAXTree");
+      const found = nodes.some(n => n.name?.value?.toLowerCase().includes(text.toLowerCase()));
+      if (found) return true;
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(`Timed out waiting for text: ${text}`);
 }
 
 // ── Relay Connection ───────────────────────────────────────────────────────
@@ -197,7 +240,11 @@ function connect() {
           data = { count: tabs.length, tabs: tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active })) };
           break;
         case "snapshot":
-          data = { status: "success", snapshot: await generateCdpSnapshot(msg.tabId, msg.ref) };
+          data = { status: "success", snapshot: await generateCdpSnapshot(msg.tabId, msg.ref, msg.interactiveOnly) };
+          break;
+        case "wait_text":
+          await waitText(msg.tabId, msg.text, msg.timeout);
+          data = { status: "success" };
           break;
         case "click": {
           const c = msg.wait ? await waitForTarget(msg.tabId, msg.ref) : await resolveTarget(msg.tabId, msg.ref);
@@ -212,7 +259,17 @@ function connect() {
           } catch (e) {
             const { object } = await cdpSendCommand(c.debuggee, "DOM.resolveNode", { backendNodeId: c.backendNodeId });
             await cdpSendCommand(c.debuggee, "Runtime.callFunctionOn", {
-              functionDeclaration: "function() { this.click(); }",
+              functionDeclaration: `function() { 
+                this.click(); 
+                if (this.tagName === 'INPUT' || this.getAttribute('role') === 'radio' || this.getAttribute('role') === 'checkbox') {
+                  const parent = this.closest('label') || this.parentElement;
+                  if (parent) {
+                    parent.click();
+                    parent.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    parent.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                  }
+                }
+              }`,
               objectId: object.objectId
             });
           }

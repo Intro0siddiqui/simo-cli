@@ -56,6 +56,7 @@ func init() {
 	rootCmd.AddCommand(wrapCmd("exec", "Execute JS code"))
 	rootCmd.AddCommand(wrapCmd("grid", "Solve a grid of radio/checkboxes"))
 	rootCmd.AddCommand(wrapCmd("scroll", "Scroll the page or an element"))
+	rootCmd.AddCommand(wrapCmd("wait-text", "Wait for text to appear in the AXTree"))
 }
 
 var serveCmd = &cobra.Command{

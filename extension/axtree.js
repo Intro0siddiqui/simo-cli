@@ -57,7 +57,11 @@ export async function walkAXTree(debuggee, nodes, depth, context, parentName = "
     const isInteractive = INTERACTIVE_ROLES.has(role) ||
       node.properties?.some(p => p.name === "draggable" && p.value.value === "true");
 
-    const isVisible = !node.ignored && (isInteractive || name);
+    let isVisible = !node.ignored && (isInteractive || name);
+    if (context.interactiveOnly && !isInteractive) {
+      isVisible = false;
+    }
+    
     if (isVisible) {
       nextDepth = d + 1;
       currentPName = name || pName;
