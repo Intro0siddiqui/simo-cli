@@ -178,6 +178,8 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 | `type` | `simo type <id> <ref> "<text>"` | **Human-Paced**: Type with jitter |
 | `shot` | `simo shot <id> [-o path]` | Take a screenshot → `screenshot.png` |
 | `drag` | `simo drag <id> <from> <to>` | Physical drag-and-drop interaction |
+| `wait` | `simo wait <id> <ref>` | Wait for element to become actionable |
+| `wait-text` | `simo wait-text <id> <text>` | Wait for text to appear in AXTree |
 | `open` | `simo open <url>` | Open a new tab |
 | `nav` | `simo nav <id> <url>` | Navigate existing tab to URL |
 | `exec` | `simo exec <id> "<code>"` | Execute arbitrary JavaScript |

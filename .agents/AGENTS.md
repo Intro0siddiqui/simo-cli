@@ -33,3 +33,4 @@ This guide is for AI agents (like me) and developers who are tasked with maintai
 | 🔴 High | **Go Relay Port** | Rewrite `server.py` in Go — eliminates Python dependency entirely. |
 | 🟡 Medium | **Hardware-Pulse** | Implement `mousePressed` + hold + `mouseReleased` with randomized jitter for anti-bot. |
 | 🟢 Low | **Multi-Tab Concurrency** | Verified functional during stress tests. |
+| 🟢 Low | **User Guide Expansion** | (Done) Created `troubleshooting.md`. |

@@ -27,6 +27,8 @@ The `obs` command is your unified entry point for monitoring and control.
 | `./simo click <id> <ref> [--verify]` | **Verified Strike**: Click and confirm state change |
 | `./simo grid <id> <ref> "Query"` | **Grid-Solver**: Atomic row-by-row interaction |
 | `./simo scroll <id> <delta>` | **Viewport Control**: Scroll page or element |
+| `./simo wait <id> <ref>` | Wait for element to appear/become actionable |
+| `./simo wait-text <id> <text>` | Wait for specific text to appear in AXTree |
 | `./simo shot <id> [-o path]` | Take a screenshot (PNG) |
 | `./simo hover <id> <ref>` | Hover an element to reveal hidden menus |
 | `./simo type <id> <ref> <text>` | **Human-Paced**: Type with randomized delays |

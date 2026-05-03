@@ -3,9 +3,9 @@
 This document tracks planned architectural improvements and documentation tasks deferred to prioritize current feature development.
 
 ## 1. Documentation & Skill Integration
-- [ ] **Merge Skills**: Integrate technical content from `skills.md` into the formal `.gemini/skills/simo-automator/SKILL.md` template.
+- [x] **Merge Skills**: Integrated technical content into the formal `.agents/skills/simo-automator/SKILL.md` template.
 - [ ] **Resource Organization**: Move `observer.py` and `server.py` references into the `scripts/` directory structure within the Gemini skill folder.
-- [ ] **User Guide Expansion**: Create a dedicated `troubleshooting.md` for common CDP connection issues.
+- [x] **User Guide Expansion**: Created `troubleshooting.md` for common CDP connection issues.
 
 ## 2. Architectural Evolution (Go Migration)
 - [ ] **Source Recovery**: Re-implement the Go `cmd/` and `client/` structures (removed in v1.9.9 cleanup) to support a single-binary distribution.
@@ -18,4 +18,4 @@ This document tracks planned architectural improvements and documentation tasks 
 - [ ] **Detection Evasion**: Rotate "Hardware-Pulse" delay signatures to prevent pattern-matching by anti-bot services.
 
 ---
-*Last Updated: 2026-04-30 by Agent Simo*
+*Last Updated: 2026-05-22 by Agent Jules*
