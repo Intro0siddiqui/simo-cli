@@ -10,7 +10,7 @@ This document tracks planned architectural improvements and documentation tasks 
 ## 2. Architectural Evolution (Go Migration)
 - [ ] **Source Recovery**: Re-implement the Go `cmd/` and `client/` structures (removed in v1.9.9 cleanup) to support a single-binary distribution.
 - [ ] **Relay Port**: Rewrite the Python `server.py` in Go to eliminate the Python dependency entirely.
-- [ ] **Cross-Platform Helpers**: Replace `.sh` scripts (`start-observer.sh`, `install.sh`) with Go-native commands (e.g., `simo serve`, `simo init`).
+- [ ] **Cross-Platform Helpers**: Replace `.sh` scripts (`start-observer.sh`, `install.sh`) with Go-native commands (e.g., `simo serve`, `simo init`). Note: `install.sh` has been removed in favor of manual steps.
 
 ## 3. Stability & Intelligence
 - [ ] **Multi-Tab Support**: Improve the Go binary's ability to handle concurrent tab monitoring.
