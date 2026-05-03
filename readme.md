@@ -4,9 +4,17 @@ Remote Chrome tab monitor and controller — query and manipulate open tabs from
 
 ## Quick Start
 
-```bash
-./install.sh
-```
+1. **Build the CLI**:
+   ```bash
+   go build -o simo main.go
+   ```
+
+2. **Setup Python Environment**:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
 Then load the extension in Chrome:
 
