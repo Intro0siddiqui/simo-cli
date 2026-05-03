@@ -330,6 +330,36 @@ function connect() {
           data = { status: "success" };
           break;
         }
+        case "drag": {
+          const from = await resolveTarget(msg.tabId, msg.from);
+          const to = await resolveTarget(msg.tabId, msg.to);
+          await ensureDebuggerAttached(msg.tabId);
+          const fromBox = await ensureActionable(from.debuggee, from.backendNodeId);
+          const toBox = await ensureActionable(to.debuggee, to.backendNodeId);
+
+          // Start drag
+          await cdpSendCommand(from.debuggee, "Input.dispatchMouseEvent", { 
+            type: "mouseMoved", x: fromBox.x, y: fromBox.y, buttons: 1 
+          });
+          await new Promise(r => setTimeout(r, 100));
+          await cdpSendCommand(from.debuggee, "Input.dispatchMouseEvent", { 
+            type: "mousePressed", x: fromBox.x, y: fromBox.y, button: "left", buttons: 1, clickCount: 1 
+          });
+          await new Promise(r => setTimeout(r, 200));
+
+          // Move to target (direct)
+          await cdpSendCommand(from.debuggee, "Input.dispatchMouseEvent", { 
+            type: "mouseMoved", x: toBox.x, y: toBox.y, button: "left", buttons: 1 
+          });
+          await new Promise(r => setTimeout(r, 200));
+
+          // Release
+          await cdpSendCommand(from.debuggee, "Input.dispatchMouseEvent", { 
+            type: "mouseReleased", x: toBox.x, y: toBox.y, button: "left", buttons: 0, clickCount: 1 
+          });
+          data = { status: "success" };
+          break;
+        }
         case "raw_click":
           await ensureDebuggerAttached(msg.tabId);
           await cdpSendCommand({ tabId: msg.tabId }, "Input.dispatchMouseEvent", { type: "mouseMoved", x: msg.x, y: msg.y });
