@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Simo",
-  "version": "1.9.9",
+  "version": "2.0.0",
   "description": "Remote tab monitor and controller — automate browser tabs from the terminal",
   "permissions": [
     "tabs",

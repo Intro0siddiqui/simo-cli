@@ -9,6 +9,13 @@ This occurs when the CLI cannot find a registered Chrome extension.
 3.  **Reload**: Click the "Refresh" icon on the extension card in `chrome://extensions`.
 4.  **WebSocket Port**: Ensure no other process is using port `8765`.
 
+### "Connection Stalled" / Long Delays
+If network requests to the relay server show long "stalled" durations:
+1.  **Browser Connection Limit**: Most browsers limit concurrent connections to a single host. Ensure you don't have too many orphaned tabs or processes trying to connect.
+2.  **Extension Timeout**: Simo v1.9.9.1+ includes a 5-second connection timeout to prevent 58-minute stalls. Ensure you are using the latest extension version.
+3.  **Secure Context (HTTPS)**: If you are accessing a page over HTTPS and using a custom domain for the relay, use `wss://` instead of `ws://`. 
+    - You can override the relay URL by setting `relay_url` in the extension's `chrome.storage.local`.
+
 ### "Error: Operation timed out"
 Large pages (like Instagram or LinkedIn) can take a long time to generate an AXTree.
 1.  **Try Snap Again**: Sometimes a second attempt works once the page is hydrated.

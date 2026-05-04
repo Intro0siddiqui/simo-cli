@@ -217,17 +217,36 @@ async function waitText(tabId, text, timeout = 10000) {
 // ── Relay Connection ───────────────────────────────────────────────────────
 
 let isConnecting = false;
+let connectTimeout = null;
 
-function connect() {
+async function getRelayUrl() {
+  const result = await chrome.storage.local.get("relay_url");
+  return result.relay_url || RELAY_URL;
+}
+
+async function connect() {
   if (isConnecting) return;
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
   isConnecting = true;
-  ws = new WebSocket(RELAY_URL);
+  const url = await getRelayUrl();
+  ws = new WebSocket(url);
+
+  // Connection timeout logic
+  if (connectTimeout) clearTimeout(connectTimeout);
+  connectTimeout = setTimeout(() => {
+    if (ws && ws.readyState !== WebSocket.OPEN) {
+      console.warn("[Simo] Connection timeout - closing socket");
+      ws.close();
+      isConnecting = false;
+    }
+  }, 5000); // 5 second timeout
 
   ws.onopen = () => {
     isConnecting = false;
+    if (connectTimeout) clearTimeout(connectTimeout);
     ws.send(JSON.stringify({ type: "register", role: "extension" }));
+    console.info("[Simo] Connected to relay server");
   };
 
   ws.onmessage = async (event) => {
@@ -428,13 +447,14 @@ function connect() {
   ws.onclose = () => {
     ws = null;
     isConnecting = false;
+    if (connectTimeout) clearTimeout(connectTimeout);
     setTimeout(connect, RECONNECT_DELAY);
   };
 
   ws.onerror = () => {
-    // Silence error log by not explicitly logging, let onclose handle retry
     ws = null;
     isConnecting = false;
+    if (connectTimeout) clearTimeout(connectTimeout);
   };
 }
 
