@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"syscall"
 
@@ -34,40 +33,127 @@ func getSimoDir() string {
 var rootCmd = &cobra.Command{
 	Use:   "simo",
 	Short: "Simo CLI — Agentic Browser Control Orchestrator",
-	Long:  `A cross-platform Go wrapper for the Simo Python backend. Replacement for legacy shell scripts.`,
+	Long:  `A native Go backend for the Simo extension.`,
 }
+
+var (
+	jsonFlag        bool
+	interactiveFlag bool
+	waitFlag        bool
+	verifyFlag      bool
+	timeoutFlag     int
+	outputFlag      string
+	refFlag         string
+)
 
 func init() {
 	rootCmd.PersistentFlags().IntVarP(&port, "port", "p", 8765, "port for the relay server")
 
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(runServeCmd)
 	rootCmd.AddCommand(stopCmd)
+
+	statusCmd := &cobra.Command{Use: "status", Short: "Show open browser tabs", Run: func(cmd *cobra.Command, args []string) { runClientStatus(port, jsonFlag) }}
+	statusCmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON")
 	rootCmd.AddCommand(statusCmd)
-	
-	// Dynamically wrap all other commands to observer.py
-	rootCmd.AddCommand(wrapCmd("snap", "Get accessibility snapshot"))
-	rootCmd.AddCommand(wrapCmd("shot", "Take screenshot"))
-	rootCmd.AddCommand(wrapCmd("click", "Click element by ref"))
-	rootCmd.AddCommand(wrapCmd("type", "Type text into element"))
-	rootCmd.AddCommand(wrapCmd("hover", "Hover over element by ref"))
-	rootCmd.AddCommand(wrapCmd("drag", "Drag element from one ref to another"))
-	rootCmd.AddCommand(wrapCmd("nav", "Navigate tab to URL"))
-	rootCmd.AddCommand(wrapCmd("open", "Open new tab"))
-	rootCmd.AddCommand(wrapCmd("exec", "Execute JS code"))
-	rootCmd.AddCommand(wrapCmd("grid", "Solve a grid of radio/checkboxes"))
-	rootCmd.AddCommand(wrapCmd("scroll", "Scroll the page or an element"))
-	rootCmd.AddCommand(wrapCmd("wait-text", "Wait for text to appear in the AXTree"))
-	rootCmd.AddCommand(wrapCmd("wait", "Wait for element to appear/become actionable"))
+
+	navCmd := &cobra.Command{Use: "nav [tabId] [url]", Short: "Navigate tab to URL", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientNav(port, id, args[1])
+	}}
+	rootCmd.AddCommand(navCmd)
+
+	openCmd := &cobra.Command{Use: "open [url]", Short: "Open new tab", Args: cobra.MaximumNArgs(1), Run: func(cmd *cobra.Command, args []string) {
+		u := "about:blank"
+		if len(args) > 0 {
+			u = args[0]
+		}
+		runClientOpen(port, u)
+	}}
+	rootCmd.AddCommand(openCmd)
+
+	snapCmd := &cobra.Command{Use: "snap [tabId]", Short: "Get accessibility snapshot", Args: cobra.ExactArgs(1), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientSnap(port, id, refFlag, interactiveFlag)
+	}}
+	snapCmd.Flags().StringVar(&refFlag, "ref", "", "Zoom into a specific ref")
+	snapCmd.Flags().BoolVar(&interactiveFlag, "only-interactive", false, "Only show interactive elements")
+	rootCmd.AddCommand(snapCmd)
+
+	waitTextCmd := &cobra.Command{Use: "wait-text [tabId] [text]", Short: "Wait for text to appear", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientWaitText(port, id, args[1], timeoutFlag)
+	}}
+	waitTextCmd.Flags().IntVar(&timeoutFlag, "timeout", 10000, "Timeout in ms")
+	rootCmd.AddCommand(waitTextCmd)
+
+	waitCmd := &cobra.Command{Use: "wait [tabId] [ref]", Short: "Wait for element", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientWait(port, id, args[1], timeoutFlag)
+	}}
+	waitCmd.Flags().IntVar(&timeoutFlag, "timeout", 10000, "Timeout in ms")
+	rootCmd.AddCommand(waitCmd)
+
+	clickCmd := &cobra.Command{Use: "click [tabId] [ref]", Short: "Click element by ref", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientClick(port, id, args[1], waitFlag, verifyFlag)
+	}}
+	clickCmd.Flags().BoolVar(&waitFlag, "wait", false, "Wait for element before clicking")
+	clickCmd.Flags().BoolVar(&verifyFlag, "verify", false, "Verify if click updated state")
+	rootCmd.AddCommand(clickCmd)
+
+	hoverCmd := &cobra.Command{Use: "hover [tabId] [ref]", Short: "Hover over element", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientHover(port, id, args[1], waitFlag)
+	}}
+	hoverCmd.Flags().BoolVar(&waitFlag, "wait", false, "Wait for element before hovering")
+	rootCmd.AddCommand(hoverCmd)
+
+	typeCmd := &cobra.Command{Use: "type [tabId] [ref] [text]", Short: "Type text into element", Args: cobra.ExactArgs(3), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientType(port, id, args[1], args[2], waitFlag)
+	}}
+	typeCmd.Flags().BoolVar(&waitFlag, "wait", false, "Wait for element before typing")
+	rootCmd.AddCommand(typeCmd)
+
+	shotCmd := &cobra.Command{Use: "shot [tabId]", Short: "Take a screenshot", Args: cobra.ExactArgs(1), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientShot(port, id, outputFlag)
+	}}
+	shotCmd.Flags().StringVarP(&outputFlag, "output", "o", "screenshot.png", "Output file path")
+	rootCmd.AddCommand(shotCmd)
+
+	dragCmd := &cobra.Command{Use: "drag [tabId] [from] [to]", Short: "Drag element", Args: cobra.ExactArgs(3), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientDrag(port, id, args[1], args[2])
+	}}
+	rootCmd.AddCommand(dragCmd)
+
+	gridCmd := &cobra.Command{Use: "grid [tabId] [gridRef] [query]", Short: "Solve a grid", Args: cobra.ExactArgs(3), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientGrid(port, id, args[1], args[2])
+	}}
+	rootCmd.AddCommand(gridCmd)
+
+	scrollCmd := &cobra.Command{Use: "scroll [tabId] [delta]", Short: "Scroll the page", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		delta, _ := strconv.Atoi(args[1])
+		runClientScroll(port, id, delta, refFlag)
+	}}
+	scrollCmd.Flags().StringVar(&refFlag, "ref", "", "Optional ref to scroll inside")
+	rootCmd.AddCommand(scrollCmd)
+
+	execCmd := &cobra.Command{Use: "exec [tabId] [code]", Short: "Run JS code", Args: cobra.ExactArgs(2), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		runClientExec(port, id, args[1])
+	}}
+	rootCmd.AddCommand(execCmd)
 }
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the WebSocket relay server in the background",
 	Run: func(cmd *cobra.Command, args []string) {
-		python := getPythonPath()
-		base := getBasePath()
-		serverScript := filepath.Join(base, "server.py")
-		
 		simoDir := getSimoDir()
 		logFile := filepath.Join(simoDir, "relay.log")
 		pidFile := filepath.Join(simoDir, "relay.pid")
@@ -81,10 +167,11 @@ var serveCmd = &cobra.Command{
 			}
 		}
 
-		color.Cyan("[Simo] Starting relay server on ws://127.0.0.1:%d...", port)
-		
-		c := exec.Command(python, serverScript)
-		
+		color.Cyan("[Simo] Starting native Go relay server on ws://127.0.0.1:%d...", port)
+
+		ex, _ := os.Executable()
+		c := exec.Command(ex, "run-serve", strconv.Itoa(port))
+
 		outFile, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err == nil {
 			c.Stdout = outFile
@@ -96,11 +183,24 @@ var serveCmd = &cobra.Command{
 			color.Red("Failed to start server: %v", err)
 			return
 		}
-		
+
 		os.WriteFile(pidFile, []byte(strconv.Itoa(c.Process.Pid)), 0644)
-		
+
 		color.Green("[Simo] Server started in background (PID %d).", c.Process.Pid)
 		color.Yellow("Logs: %s", logFile)
+	},
+}
+
+// Internal command to actually run the server process
+var runServeCmd = &cobra.Command{
+	Use:    "run-serve [port]",
+	Hidden: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		p := 8765
+		if len(args) > 0 {
+			p, _ = strconv.Atoi(args[0])
+		}
+		startServer(p)
 	},
 }
 
@@ -110,13 +210,13 @@ var stopCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		simoDir := getSimoDir()
 		pidFile := filepath.Join(simoDir, "relay.pid")
-		
+
 		pidBytes, err := os.ReadFile(pidFile)
 		if err != nil {
 			color.Yellow("[Simo] Relay server is not running (no pid file found).")
 			return
 		}
-		
+
 		pid, _ := strconv.Atoi(string(pidBytes))
 		process, err := os.FindProcess(pid)
 		if err == nil {
@@ -129,62 +229,4 @@ var stopCmd = &cobra.Command{
 		}
 		os.Remove(pidFile)
 	},
-}
-
-var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show open browser tabs",
-	Run: func(cmd *cobra.Command, args []string) {
-		runObserver("status", args)
-	},
-}
-
-func wrapCmd(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:                name,
-		Short:              short,
-		DisableFlagParsing: true, // Pass everything to Python
-		Run: func(cmd *cobra.Command, args []string) {
-			runObserver(name, args)
-		},
-	}
-}
-
-func getBasePath() string {
-	ex, err := os.Executable()
-	if err != nil {
-		return "."
-	}
-	evalPath, err := filepath.EvalSymlinks(ex)
-	if err == nil {
-		return filepath.Dir(evalPath)
-	}
-	return filepath.Dir(ex)
-}
-
-func getPythonPath() string {
-	base := getBasePath()
-	python := filepath.Join(base, ".venv", "bin", "python")
-	if runtime.GOOS == "windows" {
-		python = filepath.Join(base, ".venv", "Scripts", "python.exe")
-	}
-	return python
-}
-
-func runObserver(action string, args []string) {
-	python := getPythonPath()
-	base := getBasePath()
-	scriptPath := filepath.Join(base, "observer.py")
-	
-	fullArgs := append([]string{scriptPath, action}, args...)
-	
-	c := exec.Command(python, fullArgs...)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	c.Stdin = os.Stdin
-	
-	err := c.Run()
-	if err != nil {
-		os.Exit(1)
-	}
 }
