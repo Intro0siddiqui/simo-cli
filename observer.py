@@ -8,6 +8,7 @@ from typing import Any
 
 import base64
 import re
+# pyrefly: ignore [missing-import]
 import websockets
 
 DEFAULT_PORT = 8765

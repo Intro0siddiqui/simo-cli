@@ -4,13 +4,13 @@
  */
 
 const MAX_DEPTH = 30;
-const IGNORED_ROLES = new Set(["InlineTextBox", "none"]);
+const IGNORED_ROLES = new Set(["inlinetextbox", "none"]);
 const INTERACTIVE_ROLES = new Set([
-  "button", "link", "textbox", "checkbox", "radio",
-  "menuitem", "combobox", "searchbox", "option",
+  "button", "link", "textbox", "checkbox", "radio", "radiobutton",
+  "menuitem", "combobox", "searchbox", "option", "listbox",
   "switch", "tab", "treeitem", "gridcell", "heading",
   "img", "row", "cell", "listitem", "slider", "spinbutton",
-  "paragraph", "group", "region"
+  "paragraph", "group", "region", "menu"
 ]);
 
 /**
@@ -31,7 +31,7 @@ export async function walkAXTree(debuggee, nodes, depth, context, parentName = "
     rootNode = nodes.find(n => n.backendDOMNodeId === targetBackendNodeId);
   }
   if (!rootNode) {
-    rootNode = nodes.find(n => n.role?.value === "RootWebArea") || nodes[0];
+    rootNode = nodes.find(n => (n.role?.value || "").toLowerCase() === "rootwebarea") || nodes[0];
   }
   
   if (!rootNode) return "";
@@ -47,8 +47,10 @@ export async function walkAXTree(debuggee, nodes, depth, context, parentName = "
     const node = nodeById[id];
     if (!node) continue;
 
-    const role = node.role?.value || "none";
+    const role = (node.role?.value || "none").toLowerCase();
     const name = node.name?.value || "";
+
+
 
     // ── Pre-process Children ───────────────────────────────────────────────
     // Must push children BEFORE filtering parent, otherwise subtrees vanish!
@@ -74,7 +76,6 @@ export async function walkAXTree(debuggee, nodes, depth, context, parentName = "
     
     // ── Filtering Logic ────────────────────────────────────────────────────
     
-    // 1. Ignore clutter roles
     if (IGNORED_ROLES.has(role)) continue;
     
     // 2. Deduplicate: Skip if child text matches parent name
