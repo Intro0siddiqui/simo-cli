@@ -4,6 +4,14 @@ import {
   resolveTarget, waitForTarget, tabState, saveNodeMap, loadNodeMap 
 } from './cdp.js';
 
+async function findIframeTargets(tabId) {
+  return new Promise((resolve) => {
+    chrome.debugger.getTargets((targets) => {
+      resolve(targets.filter(t => t.tabId === tabId && t.type === "iframe"));
+    });
+  });
+}
+
 export async function generateCdpSnapshot(tabId, ref = null, interactiveOnly = false) {
   let targetBackendNodeId = null;
   if (ref) {
@@ -39,7 +47,26 @@ export async function generateCdpSnapshot(tabId, ref = null, interactiveOnly = f
   const { nodes } = await cdpSendCommand(debuggee, "Accessibility.getFullAXTree");
   
   const context = { nodeMap: {}, refCounter: { val: 1 }, cdpSendCommand, interactiveOnly };
-  const yaml = await walkAXTree(debuggee, nodes, 0, context, "", targetBackendNodeId);
+  let yaml = await walkAXTree(debuggee, nodes, 0, context, "", targetBackendNodeId);
+  
+  // ── Iframe target discovery ──────────────────────────────────────────
+  try {
+    const iframeTargets = await findIframeTargets(tabId);
+    for (const target of iframeTargets) {
+      const iframeDebuggee = { targetId: target.id };
+      try {
+        await ensureDebuggerAttached(tabId); // Make sure main is attached
+        await new Promise((res, rej) => chrome.debugger.attach(iframeDebuggee, "1.3", () => chrome.runtime.lastError ? rej() : res()));
+        await cdpSendCommand(iframeDebuggee, "Accessibility.enable");
+        const { nodes: iNodes } = await cdpSendCommand(iframeDebuggee, "Accessibility.getFullAXTree");
+        yaml += "\n" + await walkAXTree(iframeDebuggee, iNodes, 1, context, "");
+        await new Promise(res => chrome.debugger.detach(iframeDebuggee, res));
+      } catch (e) {
+        console.warn("[Simo] Failed to attach to iframe target:", target.id, e);
+      }
+    }
+  } catch (e) {}
+
   const enrichedYaml = await addBoxDataToYaml(yaml, context.nodeMap, cdpSendCommand);
   
   if (!ref) {

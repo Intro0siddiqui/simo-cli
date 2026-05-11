@@ -123,6 +123,14 @@ func init() {
 	shotCmd.Flags().StringVarP(&outputFlag, "output", "o", "screenshot.png", "Output file path")
 	rootCmd.AddCommand(shotCmd)
 
+	rawClickCmd := &cobra.Command{Use: "raw-click [tabId] [x] [y]", Short: "Raw CDP click at coordinates", Args: cobra.ExactArgs(3), Run: func(cmd *cobra.Command, args []string) {
+		id, _ := strconv.Atoi(args[0])
+		x, _ := strconv.Atoi(args[1])
+		y, _ := strconv.Atoi(args[2])
+		runClientRawClick(port, id, x, y)
+	}}
+	rootCmd.AddCommand(rawClickCmd)
+
 	dragCmd := &cobra.Command{Use: "drag [tabId] [from] [to]", Short: "Drag element", Args: cobra.ExactArgs(3), Run: func(cmd *cobra.Command, args []string) {
 		id, _ := strconv.Atoi(args[0])
 		runClientDrag(port, id, args[1], args[2])

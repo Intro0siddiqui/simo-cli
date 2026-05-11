@@ -48,7 +48,15 @@ export async function ensureDebuggerAttached(tabId) {
         const msg = chrome.runtime.lastError.message;
         if (msg.includes("already")) { debuggerRegistry[tabId] = true; resolve(); }
         else reject(new Error(msg));
-      } else { debuggerRegistry[tabId] = true; resolve(); }
+      } else { 
+        debuggerRegistry[tabId] = true; 
+        // Enable auto-attach for iframes
+        cdpSendCommand({ tabId }, "Target.setAutoAttach", {
+          autoAttach: true,
+          waitForDebuggerOnStart: false,
+          flatten: true
+        }).then(resolve).catch(resolve); // Proceed anyway
+      }
     });
   });
 }

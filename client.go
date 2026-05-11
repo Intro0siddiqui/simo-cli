@@ -38,7 +38,7 @@ func sendCommand(port int, msg map[string]interface{}) (map[string]interface{}, 
 	}
 
 	if errMsg, ok := data["error"].(string); ok {
-		return nil, fmt.Errorf(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
 	}
 
 	return data, nil
@@ -148,7 +148,7 @@ func runClientSnap(port int, tabId int, ref string, interactiveOnly bool) {
 	}
 	if res["status"] == "success" {
 		renderSnapshot(res["snapshot"].(string))
-		color.New(color.Faint).Println("(Note: Captured via CDP)\n")
+		color.New(color.Faint).Println("(Note: Captured via CDP)")
 	} else {
 		color.Red("Error: %v\n", res["message"])
 	}
@@ -194,11 +194,12 @@ func runClientClick(port int, tabId int, ref string, wait bool, verify bool) {
 		color.Red("Error: %v\n", err)
 		os.Exit(1)
 	}
-	if res["status"] == "success" {
+	switch res["status"] {
+	case "success":
 		color.Green("Click dispatched to %s\n", ref)
-	} else if res["status"] == "warning" {
+	case "warning":
 		color.Yellow("Warning: Click sent but verification failed (state didn't change).\n")
-	} else {
+	default:
 		color.Red("Error: %v\n", res["message"])
 	}
 }
@@ -262,6 +263,18 @@ func runClientHover(port int, tabId int, ref string, wait bool) {
 		color.Green("Hover dispatched to %s\n", ref)
 	} else {
 		color.Red("Error: %v\n", res["message"])
+	}
+}
+
+func runClientRawClick(port int, tabId int, x int, y int) {
+	_, err := sendCommand(port, map[string]interface{}{
+		"type": "action", "action": "raw_click", "tabId": tabId, "x": x, "y": y,
+	})
+	if err != nil {
+		color.Red("Error: %v\n", err)
+		os.Exit(1)
+	} else {
+		color.Green("Raw click dispatched to %d, %d\n", x, y)
 	}
 }
 
