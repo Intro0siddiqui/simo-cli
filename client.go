@@ -318,3 +318,34 @@ func runClientShot(port int, tabId int, output string) {
 		color.Red("Error: %v\n", res["message"])
 	}
 }
+
+func runClientDiag(port int) {
+	res, err := sendCommand(port, map[string]interface{}{
+		"type": "action", "action": "diag",
+	})
+	if err != nil {
+		color.Red("Error: %v\n", err)
+		os.Exit(1)
+	}
+	if res["status"] == "success" {
+		color.Cyan("Simo Diagnostic State:\n")
+		
+		sessions, ok := res["activeSessions"].(map[string]interface{})
+		if ok {
+			color.White("  Active Sessions per Tab:\n")
+			for tabId, sess := range sessions {
+				color.White("    - Tab %s: %v\n", tabId, sess)
+			}
+		}
+
+		registry, ok := res["debuggerRegistry"].(map[string]interface{})
+		if ok {
+			color.White("  Debugger Registry:\n")
+			for tabId, attached := range registry {
+				color.White("    - Tab %s: attached=%v\n", tabId, attached)
+			}
+		}
+	} else {
+		color.Red("Diagnostic failed: %v\n", res["message"])
+	}
+}

@@ -86,24 +86,7 @@ export async function walkAXTree(debuggee, nodes, depth, context, parentName = "
       nodeMap[ref] = { backendNodeId: node.backendDOMNodeId, role, name, debuggee };
       yaml += `${"  ".repeat(d)}- ${role}${name ? ` "${name}"` : ""} [ref=${ref}]\n`;
 
-      // ── Iframe Handling ──────────────────────────────────────────────────
-      if (role === "IframePresentational" || role === "iframe") {
-        try {
-          const { node: domNode } = await cdpSendCommand(debuggee, "DOM.describeNode", { backendNodeId: node.backendDOMNodeId });
-          if (domNode?.frameId) {
-            const targets = await new Promise(r => chrome.debugger.getTargets(r));
-            const target = targets.find(t => t.type === "iframe" && !t.attached);
-            if (target) {
-              const iframeDebuggee = { targetId: target.targetId };
-              await new Promise((res, rej) => chrome.debugger.attach(iframeDebuggee, "1.3", () => chrome.runtime.lastError ? rej() : res()));
-              await cdpSendCommand(iframeDebuggee, "Accessibility.enable");
-              const { nodes: iNodes } = await cdpSendCommand(iframeDebuggee, "Accessibility.getFullAXTree");
-              yaml += await walkAXTree(iframeDebuggee, iNodes, nextDepth, context, currentPName);
-              await new Promise(res => chrome.debugger.detach(iframeDebuggee, res));
-            }
-          }
-        } catch (e) {}
-      }
+      // Iframe nodes are now handled by the multi-attachment loop in generateCdpSnapshot
     }
   }
   return yaml;

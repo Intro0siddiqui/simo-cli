@@ -3,7 +3,7 @@
  * Refactored into a lightweight WebSocket router.
  */
 
-import { cdpSendCommand, ensureDebuggerAttached } from './cdp.js';
+import { cdpSendCommand, ensureDebuggerAttached, activeSessions, debuggerRegistry } from './cdp.js';
 import { 
   generateCdpSnapshot, waitText, performClick, performGridStrike, 
   performHover, performDrag, performType, performScroll 
@@ -55,6 +55,10 @@ async function connect() {
           case "get_tabs":
             const tabs = await chrome.tabs.query({});
             data = { count: tabs.length, tabs: tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active })) };
+            break;
+          case "diag":
+            console.log("[Simo] Diagnostic request received");
+            data = { status: "success", activeSessions, debuggerRegistry };
             break;
           case "snapshot":
             data = { status: "success", snapshot: await generateCdpSnapshot(msg.tabId, msg.ref, msg.interactiveOnly) };

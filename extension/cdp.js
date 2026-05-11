@@ -6,7 +6,7 @@ export const debuggerRegistry = {}; // tabId -> true if attached
 export async function saveNodeMap(tabId, nodeMap) {
   const serializable = {};
   for (const [ref, node] of Object.entries(nodeMap)) {
-    serializable[ref] = { backendNodeId: node.backendNodeId, role: node.role, name: node.name, box: node.box };
+    serializable[ref] = { backendNodeId: node.backendNodeId, role: node.role, name: node.name, box: node.box, sessionId: node.sessionId };
   }
   await chrome.storage.session.set({ [`nodeMap_${tabId}`]: serializable });
 }
@@ -16,7 +16,7 @@ export async function loadNodeMap(tabId) {
   const raw = result[`nodeMap_${tabId}`] || {};
   const restored = {};
   for (const [ref, node] of Object.entries(raw)) {
-    restored[ref] = { ...node, debuggee: { tabId } };
+    restored[ref] = { ...node, debuggee: { tabId, sessionId: node.sessionId } };
   }
   return restored;
 }
@@ -29,39 +29,94 @@ export async function getTabState(tabId) {
   return tabState[tabId];
 }
 
-// ── CDP Helpers ────────────────────────────────────────────────────────────
+// ── CDP Router & Session Management ────────────────────────────────────────
+
+export const activeSessions = {}; // tabId -> [targetIds] (actually targetIds now)
 
 export async function cdpSendCommand(debuggee, method, params = {}) {
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(debuggee, method, params, (result) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve(result);
-    });
-  });
-}
-
-export async function ensureDebuggerAttached(tabId) {
-  if (debuggerRegistry[tabId]) return;
-  await new Promise((resolve, reject) => {
-    chrome.debugger.attach({ tabId }, "1.3", () => {
       if (chrome.runtime.lastError) {
-        const msg = chrome.runtime.lastError.message;
-        if (msg.includes("already")) { debuggerRegistry[tabId] = true; resolve(); }
-        else reject(new Error(msg));
-      } else { 
-        debuggerRegistry[tabId] = true; 
-        // Enable auto-attach for iframes
-        cdpSendCommand({ tabId }, "Target.setAutoAttach", {
-          autoAttach: true,
-          waitForDebuggerOnStart: false,
-          flatten: true
-        }).then(resolve).catch(resolve); // Proceed anyway
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(result);
       }
     });
   });
 }
 
-chrome.debugger.onDetach.addListener((source) => { if (source.tabId) delete debuggerRegistry[source.tabId]; });
+export async function ensureDebuggerAttached(tabId) {
+  console.log('Simo Multi-Attaching to tab', tabId);
+  
+  // 1. Attach to main tab if not already
+  if (!debuggerRegistry[tabId]) {
+    await new Promise((resolve, reject) => {
+      chrome.debugger.attach({ tabId }, "1.3", () => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Simo] Main attach warning:", chrome.runtime.lastError.message);
+        }
+        debuggerRegistry[tabId] = true;
+        resolve();
+      });
+    });
+  }
+
+  // 2. Discover all targets for this tab
+  return new Promise((resolve) => {
+    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+      const frameUrls = (frames || []).map(f => f.url);
+      console.log("[Simo] WebNav found", frameUrls.length, "frames in tab", tabId);
+
+      chrome.debugger.getTargets(async (targets) => {
+        const related = targets.filter(t => {
+          if (t.tabId === tabId) return true;
+          // Most OOPIFs in modern Chrome won't have the tabId set in getTargets.
+          // We attach to all iframes found and filter them during the snapshot walk.
+          return t.type === 'iframe';
+        });
+        
+        console.log("[Simo] Found", related.length, "matching targets in browser");
+        
+        if (!activeSessions[tabId]) activeSessions[tabId] = [];
+        
+        for (const t of related) {
+          if (t.id === tabId.toString()) continue;
+
+          if (!activeSessions[tabId].includes(t.id)) {
+            console.log("[Simo] Attaching to sub-target:", t.id, t.url);
+            await new Promise(r => {
+              chrome.debugger.attach({ targetId: t.id }, "1.3", () => {
+                if (!chrome.runtime.lastError) {
+                  activeSessions[tabId].push(t.id);
+                  console.info("[Simo] Attached to iframe target:", t.id);
+                } else {
+                  console.warn("[Simo] Sub-target attach failed:", chrome.runtime.lastError.message);
+                }
+                r();
+              });
+            });
+          }
+        }
+        resolve();
+      });
+    });
+  });
+}
+
+chrome.debugger.onDetach.addListener((source) => { 
+  if (source.tabId) {
+    delete debuggerRegistry[source.tabId];
+    delete activeSessions[source.tabId];
+  }
+  // If a targetId detached, find it in activeSessions and remove it
+  if (source.targetId) {
+    for (const tabId in activeSessions) {
+      activeSessions[tabId] = activeSessions[tabId].filter(id => id !== source.targetId);
+    }
+  }
+});
+
+// ── Interaction Primitives ───────────────────────────────────────────────
 
 export async function ensureActionable(debuggee, backendNodeId) {
   for (let i = 0; i < 10; i++) {
@@ -84,19 +139,17 @@ export async function resolveTarget(tabId, ref) {
   let node = state.nodeMap[ref];
   if (!node) node = Object.values(state.nodeMap).find(n => n.name === ref || n.role === ref);
   if (!node) throw new Error("Ref not found");
+  
+  const debuggee = node.debuggee || { tabId };
+  
   try {
     await ensureDebuggerAttached(tabId);
-    await cdpSendCommand(node.debuggee, "DOM.getBoxModel", { backendNodeId: node.backendNodeId });
-    return node;
+    await cdpSendCommand(debuggee, "DOM.getBoxModel", { backendNodeId: node.backendNodeId });
+    return { ...node, debuggee };
   } catch (e) {
-    await ensureDebuggerAttached(tabId);
-    await cdpSendCommand({ tabId }, "Accessibility.enable");
-    const { nodes } = await cdpSendCommand({ tabId }, "Accessibility.getFullAXTree");
-    const match = nodes.find(n => n.role?.value === node.role && n.name?.value === node.name);
-    if (!match) throw new Error("Vanished");
-    node.backendNodeId = match.backendDOMNodeId;
-    node.debuggee = { tabId };
-    return node;
+    // If it fails, it might be because the backendNodeId is stale.
+    // In a multi-target world, we should ideally re-scan the specific debuggee.
+    throw new Error(`Target ${ref} vanished or inaccessible: ${e.message}`);
   }
 }
 

@@ -156,6 +156,9 @@ func init() {
 		runClientExec(port, id, args[1])
 	}}
 	rootCmd.AddCommand(execCmd)
+
+	diagCmd := &cobra.Command{Use: "diag", Short: "Get extension diagnostic state", Run: func(cmd *cobra.Command, args []string) { runClientDiag(port) }}
+	rootCmd.AddCommand(diagCmd)
 }
 
 var serveCmd = &cobra.Command{
