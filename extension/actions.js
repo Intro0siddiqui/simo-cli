@@ -5,16 +5,7 @@ import {
   activeSessions
 } from './cdp.js';
 
-async function findIframeTargets(tabId) {
-  try {
-    const { targetInfos } = await cdpSendCommand({ tabId }, "Target.getTargets");
-    // Target.getTargets on the tab only returns targets in the same browser context.
-    // However, it might not return everything. We can also ask the global browser.
-    return targetInfos.filter(t => t.type === "iframe");
-  } catch (e) {
-    return [];
-  }
-}
+
 
 export async function generateCdpSnapshot(tabId, ref = null, interactiveOnly = false) {
   let targetBackendNodeId = null;
@@ -66,10 +57,7 @@ export async function generateCdpSnapshot(tabId, ref = null, interactiveOnly = f
       
       const subContext = { ...context, targetId };
       yaml += "\n" + await walkAXTree(subDebuggee, subNodes, 1, subContext, "");
-      console.log("[Simo] Appended AXTree from sub-target:", targetId);
-    } catch (e) {
-      console.warn("[Simo] Failed to get AXTree for sub-target:", targetId, e.message);
-    }
+    } catch (e) {}
   }
 
   const enrichedYaml = await addBoxDataToYaml(yaml, context.nodeMap, cdpSendCommand);

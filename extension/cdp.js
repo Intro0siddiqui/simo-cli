@@ -61,41 +61,35 @@ export async function ensureDebuggerAttached(tabId) {
     });
   }
 
-  // 2. Discover all targets for this tab
+  // 2. Discover all targets belonging to this specific tab
   return new Promise((resolve) => {
     chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
-      const frameUrls = (frames || []).map(f => f.url);
-      console.log("[Simo] WebNav found", frameUrls.length, "frames in tab", tabId);
-
+      const tabFrameUrls = new Set((frames || []).map(f => f.url));
+      
       chrome.debugger.getTargets(async (targets) => {
+        // Find targets that either:
+        // a) Explicitly belong to this tabId
+        // b) Are iframes whose URL matches a frame we know is in this tab
         const related = targets.filter(t => {
           if (t.tabId === tabId) return true;
-          // Most OOPIFs in modern Chrome won't have the tabId set in getTargets.
-          // We attach to all iframes found and filter them during the snapshot walk.
-          return t.type === 'iframe';
+          // OOPIF Fallback: Force-include any target from the NotebookLM sandbox domain
+          if (t.url && t.url.includes('usercontent.goog')) return true;
+          return (t.type === 'iframe' || t.type === 'page') && tabFrameUrls.has(t.url);
         });
-        
-        console.log("[Simo] Found", related.length, "matching targets in browser");
         
         if (!activeSessions[tabId]) activeSessions[tabId] = [];
         
         for (const t of related) {
-          if (t.id === tabId.toString()) continue;
+          if (t.id === tabId.toString() || activeSessions[tabId].includes(t.id)) continue;
 
-          if (!activeSessions[tabId].includes(t.id)) {
-            console.log("[Simo] Attaching to sub-target:", t.id, t.url);
-            await new Promise(r => {
-              chrome.debugger.attach({ targetId: t.id }, "1.3", () => {
-                if (!chrome.runtime.lastError) {
-                  activeSessions[tabId].push(t.id);
-                  console.info("[Simo] Attached to iframe target:", t.id);
-                } else {
-                  console.warn("[Simo] Sub-target attach failed:", chrome.runtime.lastError.message);
-                }
-                r();
-              });
+          await new Promise(r => {
+            chrome.debugger.attach({ targetId: t.id }, "1.3", () => {
+              if (!chrome.runtime.lastError) {
+                activeSessions[tabId].push(t.id);
+              }
+              r();
             });
-          }
+          });
         }
         resolve();
       });
