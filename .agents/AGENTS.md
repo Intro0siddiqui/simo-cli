@@ -18,7 +18,7 @@ This guide is for AI agents (like me) and developers who are tasked with maintai
 *   **Scrolling**: If an element is off-screen, use `simo scroll <id> <delta>` to bring it into the viewport before clicking.
 
 ## 4. Debugging the Relay
-*   If commands are timing out, check the `relay.log` in the `.simo` directory.
+*   If commands are timing out, check the relay.log in the ~/.simo directory.
 *   Ensure the extension is loaded in "Developer Mode" and the background service worker is active.
 *   **Switch Scoping**: When adding new actions to `background.js`, always wrap `case` logic in `{}` blocks to avoid variable redeclaration errors.
 
