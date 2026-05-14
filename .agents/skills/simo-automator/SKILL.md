@@ -45,8 +45,8 @@ Before describing skills, understand the system topology — because every skill
 [Go Orchestrator: `simo`]
        │  direct CLI call
        ▼
-[Go Relay: `relay.go`]
-       │  JSON payload over WebSocket (ws://localhost:8765)
+[Go Relay: `simo serve`]
+       │  Forwarded JSON payload over WebSocket (ws://localhost:8765)
        ▼
 [Agent: Chrome Extension (background.js)]
        │  CDP commands
