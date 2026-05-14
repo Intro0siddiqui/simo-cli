@@ -1,6 +1,6 @@
 # Simo CLI — Agentic Browser Control
 
-Remote Chrome tab monitor and controller — query and manipulate open tabs from your terminal via a lightweight WebSocket relay. Designed for high-stakes agentic automation.
+Remote Chrome tab monitor and controller — query and manipulate open tabs from your terminal via a native Go WebSocket relay. Designed for high-stakes agentic automation.
 
 ## Quick Start
 
@@ -9,26 +9,18 @@ Remote Chrome tab monitor and controller — query and manipulate open tabs from
    go build -o simo main.go
    ```
 
-2. **Setup Python Environment**:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-Then load the extension in Chrome:
-
-1. Navigate to `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `extension` directory inside this project
+2. **Load the extension in Chrome**:
+   1. Navigate to `chrome://extensions`
+   2. Enable **Developer mode**
+   3. Click **Load unpacked** → select the `extension` directory inside this project
 
 ## Usage
 
-The `obs` command is your unified entry point for monitoring and control.
+The `simo` command is your unified entry point for monitoring and control.
 
 | Command | Description |
 |---|---|
-| `./simo serve` | Start the WebSocket relay server (background) |
+| `./simo serve` | Start the native Go WebSocket relay server (background) |
 | `./simo stop` | Stop the relay server |
 | `./simo status` | Show open tabs (pretty list) |
 | `./simo snap <id> [--ref eN]` | **Adaptive Lens**: High-res snapshot (zoom into ref) |
@@ -56,14 +48,13 @@ The `obs` command is your unified entry point for monitoring and control.
 ## Architecture
 
 ```
-Chrome (CDP) ◄──► Extension ◄──WS:8765──► server.py ◄──► Go Wrapper (simo)
+Chrome (CDP) ◄──► Extension ◄──WS:8765──► Simo Go Relay ◄──► Simo CLI
 ```
 
 - **background.js** — The "Nervous System" (CDP bridge)
 - **axtree.js** — The "Visual Cortex" (Semantic filtration)
-- **server.py** — The "Relay" (Async WebSocket gateway)
+- **relay.go** — The "Relay" (Native Go WebSocket gateway)
 - **main.go** — The "Brain" (Cross-platform CLI orchestrator)
 
 ## Documentation
-- [Agent Protocol](AGENTS.md) — Technical guide for AI and Human developers.
-
+- [Agent Protocol](.agents/AGENTS.md) — Technical guide for AI and Human developers.
