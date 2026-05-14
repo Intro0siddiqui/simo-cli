@@ -28,13 +28,13 @@ simo status          # Must show at least one active tab
 ```
 
 If you see `Error: Extension not connected`:
-1. Run `simo serve` in a separate terminal to start the relay.
+1. Run `simo serve` to start the relay.
 2. Reload the Simo extension at `chrome://extensions`.
 3. Re-run `simo status`.
 
 ---
 
-## Architecture: The Multiplexed Relay Model
+## Architecture: The Native Go Relay Model
 
 Before describing skills, understand the system topology — because every skill operates within these constraints.
 
@@ -43,13 +43,10 @@ Before describing skills, understand the system topology — because every skill
        │  simo <command>
        ▼
 [Go Orchestrator: `simo`]
-       │  delegates to
+       │  direct CLI call
        ▼
-[Brain: observer.py]
-       │  JSON payload over WebSocket
-       ▼
-[Relay: server.py (ws://localhost:8765)]
-       │  forwards to registered extension
+[Go Relay: `relay.go`]
+       │  JSON payload over WebSocket (ws://localhost:8765)
        ▼
 [Agent: Chrome Extension (background.js)]
        │  CDP commands
@@ -60,7 +57,7 @@ Before describing skills, understand the system topology — because every skill
 **Why this matters for skill design:**
 - Commands travel asynchronously. Network latency between the relay and extension is real.
 - The extension runs in an isolated browser context — it cannot access `chrome://` internal pages via CDP.
-- The relay only accepts one registered extension at a time (`extension_ws`).
+- The relay only accepts one registered extension at a time.
 - Tab IDs are ephemeral — always run `simo status` to get fresh IDs before acting.
 
 ---
@@ -96,7 +93,7 @@ These are Simo's eyes. They determine *what* the agent can see before it acts.
 
 ### 2.2 Synthetic Hover
 - **Command**: `simo hover <tab_id> <ref>`
-- **What it does**: Dispatches a `mouseMoved` CDP event to the semantic center of a target element.
+- **What it does**: Dispatches a `mouseMoved` CDP event to the center of a target element.
 - **When to use**: On React-heavy sites, many buttons (e.g., "Unsend", "Delete", "Edit") only *appear* in the AXTree after a hover event triggers a state change. If `snap` doesn't show a button you expect, `hover` a nearby element first, then `snap` again.
 - **Critical pattern**: `hover` → `snap` → `click`. This is the unlock sequence for hidden UI.
 
@@ -159,7 +156,7 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 
 ### 4.2 Passive Relay Model
 - The CLI (`simo` binary) never touches the browser directly.
-- Commands are translated to JSON and sent over a WebSocket to a lightweight relay (`server.py`), which forwards them to the extension.
+- Commands are translated to JSON and sent over a WebSocket to a native Go relay, which forwards them to the extension.
 - This separation means the target page cannot detect the CLI process via browser fingerprinting or network monitoring.
 
 ---
@@ -205,5 +202,3 @@ These are Simo's cloak. They determine how *undetectable* the agent's actions ar
 2. simo grid <id> <ref> "Highly Likely" # Strike all rows
 3. simo click <id> <next_button_ref>    # Proceed to next page
 ```
-
-

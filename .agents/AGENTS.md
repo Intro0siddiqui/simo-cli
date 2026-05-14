@@ -18,19 +18,19 @@ This guide is for AI agents (like me) and developers who are tasked with maintai
 *   **Scrolling**: If an element is off-screen, use `simo scroll <id> <delta>` to bring it into the viewport before clicking.
 
 ## 4. Debugging the Relay
-*   If commands are timing out, check the `server.py` logs. 
+*   If commands are timing out, check the `relay.log` in the `.simo` directory.
 *   Ensure the extension is loaded in "Developer Mode" and the background service worker is active.
 *   **Switch Scoping**: When adding new actions to `background.js`, always wrap `case` logic in `{}` blocks to avoid variable redeclaration errors.
 
 ## 5. Coding Standards
 *   **ES Modules**: The extension uses standard ES Modules (`import/export`). 
-*   **Go Synchronization**: If you modify `observer.py` arguments, you MUST also update `main.go` and run `go build -o simo main.go` to keep the binary in sync.
+*   **Go Synchronization**: If you modify client logic or server protocols, you MUST also update `main.go`, `relay.go`, or `client.go` and run `go build -o simo main.go` to keep the binary in sync.
 
 ## 6. Roadmap (Deferred Skills)
 
 | Priority | Skill | Description |
 |----------|-------|-------------|
-| 🔴 High | **Go Relay Port** | Rewrite `server.py` in Go — eliminates Python dependency entirely. |
+| 🔴 High | **Visual Verification Loop** | Implement an automatic `shot` + AI-analysis step after every `click` to ensure the interaction had the intended effect. |
 | 🟡 Medium | **Hardware-Pulse** | Implement `mousePressed` + hold + `mouseReleased` with randomized jitter for anti-bot. |
 | 🟢 Low | **Multi-Tab Concurrency** | Verified functional during stress tests. |
 | 🟢 Low | **User Guide Expansion** | (Done) Created `troubleshooting.md`. |
