@@ -182,6 +182,9 @@ var serveCmd = &cobra.Command{
 
 		ex, _ := os.Executable()
 		c := exec.Command(ex, "run-serve", strconv.Itoa(port))
+		c.SysProcAttr = &syscall.SysProcAttr{
+			Setsid: true,
+		}
 
 		outFile, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err == nil {

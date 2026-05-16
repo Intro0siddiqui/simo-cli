@@ -9,7 +9,7 @@ import {
   performHover, performDrag, performType, performScroll 
 } from './actions.js';
 
-const RELAY_URL = "ws://localhost:8765";
+const RELAY_URL = "ws://127.0.0.1:8765";
 const RECONNECT_DELAY = 3000;
 
 let ws = null;

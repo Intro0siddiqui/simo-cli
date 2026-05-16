@@ -142,7 +142,7 @@ func (s *RelayServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
 func startServer(port int) {
 	relay := NewRelayServer()
 	http.HandleFunc("/", relay.HandleConnection)
-	addr := fmt.Sprintf("0.0.0.0:%d", port)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	log.Printf("Relay listening on ws://%s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
